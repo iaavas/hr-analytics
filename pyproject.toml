@@ -20,6 +20,11 @@ dev = [
     "ruff>=0.1.0",
 ]
 
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["app*", "etl*", "config*", "data*", "notebooks*"]
+exclude = ["tests*", ".*", "__pycache__"]
+
 [build-system]
 requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
