@@ -11,6 +11,13 @@ dependencies = [
     "python-multipart>=0.0.6",
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
+    "psycopg2-binary>=2.9.0",
+    "click>=8.0.0",
+    "minio>=7.0.0",
+    "psycopg2",
+    "luigi>=3.5.0",
+    "pandas",
+    "luigi",
 ]
 
 [project.optional-dependencies]
