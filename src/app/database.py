@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 from pydantic_settings import BaseSettings
 import os
@@ -13,10 +13,7 @@ db_settings = DatabaseSettings()
 
 database_url = os.environ.get("DATABASE_URL", db_settings.database_url)
 
-engine = create_engine(
-    database_url,
-    echo=db_settings.echo,
-)
+engine = create_engine(database_url, echo=db_settings.echo)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -32,9 +29,17 @@ def get_db():
 
 
 def init_db():
-    """Initialize database tables."""
+    """Create schemas and all tables."""
 
+    with engine.connect() as conn:
+        conn.execute(text("CREATE SCHEMA IF NOT EXISTS bronze"))
+        conn.execute(text("CREATE SCHEMA IF NOT EXISTS silver"))
+        conn.execute(text("CREATE SCHEMA IF NOT EXISTS gold"))
+        conn.commit()
+
+    from src.db.models.bronze import EmployeeBronze, TimesheetBronze
     Base.metadata.create_all(bind=engine)
+
 
 if __name__ == "__main__":
     init_db()

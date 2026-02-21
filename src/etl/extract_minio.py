@@ -50,7 +50,8 @@ class MinIOExtractor:
                 object_name,
                 file_path,
             )
-            logger.info(f"Uploaded {file_path} to {self.bucket_name}/{object_name}")
+            logger.info(
+                f"Uploaded {file_path} to {self.bucket_name}/{object_name}")
         except S3Error as e:
             logger.error(f"Error uploading file: {e}")
             raise
@@ -61,7 +62,8 @@ class MinIOExtractor:
             for file in files:
                 if file.endswith(".csv"):
                     file_path = os.path.join(root, file)
-                    object_name = os.path.join(prefix, os.path.basename(file_path))
+                    object_name = os.path.join(
+                        prefix, os.path.basename(file_path))
                     self.upload_file(file_path, object_name)
                     uploaded.append(object_name)
         return uploaded
@@ -83,7 +85,7 @@ class MinIOExtractor:
         try:
             response = self.client.get_object(self.bucket_name, object_name)
             data = response.read()
-            df = pd.read_csv(io.BytesIO(data))
+            df = pd.read_csv(io.BytesIO(data), on_bad_lines="skip")
             logger.info(f"Downloaded and parsed {object_name}")
             return df
         except S3Error as e:
@@ -120,7 +122,7 @@ class MinIOExtractor:
             logger.error(f"Error downloading object: {e}")
             raise
 
+
 if __name__ == "__main__":
     extractor = MinIOExtractor()
     print(extractor.list_objects())
-    

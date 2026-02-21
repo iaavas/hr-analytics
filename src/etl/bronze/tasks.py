@@ -3,99 +3,127 @@ import pandas as pd
 import logging
 import os
 
-from src.etl.tasks.extract import ExtractFileFromMinIO, DiscoverMinIOFiles
+from src.etl.bronze.extract import (
+    ExtractFromMinIO,
+    ExtractFromLocal,
+    DiscoverMinIOFiles,
+)
 from src.etl.bronze.loader import BronzeLoader
+from src.app.config import settings
 
 logger = logging.getLogger(__name__)
 
+ENTITY_MAP = {
+    "employee": "employee",
+    "timesheet": "timesheet",
+}
+
 
 class LoadSingleFileBronze(luigi.Task):
-  
-    entity = luigi.Parameter()       
-    object_name = luigi.Parameter()  
+    """Load one CSV into the correct bronze table based on entity type."""
+    entity = luigi.Parameter()
+    filename = luigi.Parameter()
+    source = luigi.Parameter(default="minio")
 
     def requires(self):
-        return ExtractFileFromMinIO(object_name=self.object_name)
+        if self.source == "minio":
+            return ExtractFromMinIO(filename=self.filename)
+        return ExtractFromLocal(filename=self.filename)
 
     def output(self):
-        safe_name = os.path.basename(self.object_name).replace(".csv", "")
-        return luigi.LocalTarget(f"logs/markers/bronze_{self.entity}_{safe_name}.done")
+        safe_name = self.filename.replace(".csv", "")
+        return luigi.LocalTarget(
+            f"logs/markers/bronze_{self.entity}_{safe_name}.done"
+        )
 
     def run(self):
-        local_path = self.input().path
-
-        if not os.path.exists(local_path):
-            raise FileNotFoundError(f"Extracted file not found: {local_path}")
-
-        df = pd.read_csv(local_path)
-        source_file = os.path.basename(self.object_name)
+        df = pd.read_csv(self.input().path,
+                         on_bad_lines="skip", engine="python", sep="|",
+                         na_values=["[NULL]", "NULL", ""])
 
         with BronzeLoader() as loader:
             if self.entity == "employee":
-                count = loader.load_employee_data(df, source_file=source_file)
+                count = loader.load_employee_data(
+                    df, source_file=self.filename)
             elif self.entity == "timesheet":
-                count = loader.load_timesheet_data(df, source_file=source_file)
+                count = loader.load_timesheet_data(
+                    df, source_file=self.filename)
             else:
-                raise ValueError(f"Unknown entity: {self.entity}")
+                raise ValueError(f"Unknown entity type: {self.entity}")
 
-        logger.info(f"Bronze load complete: {count} records from {source_file}")
+        logger.info(f"Bronze load: {count} records from {self.filename}")
 
-        os.makedirs(os.path.dirname(self.output().path), exist_ok=True)
+        os.makedirs("logs/markers", exist_ok=True)
         with self.output().open("w") as f:
-            f.write(f"loaded {count} records from {source_file}")
+            f.write(f"loaded {count} records from {self.filename}")
 
 
 class LoadAllBronze(luigi.Task):
-  
+    """
+    Entry point — discovers all CSVs and loads them all into bronze.
+    Handles any number of employee_* and timesheet_* files automatically.
+    Safe to rerun — skips files that already have .done markers.
+    """
+    source = luigi.Parameter(default="minio")
     prefix = luigi.Parameter(default="")
 
-    ENTITY_MAP = {
-        "employee": "employee",
-        "timesheet": "timesheet",
-    }
-
     def requires(self):
-        return DiscoverMinIOFiles(prefix=self.prefix)
+        if self.source == "minio":
+            return DiscoverMinIOFiles(prefix=self.prefix)
+        return []
 
     def output(self):
         return luigi.LocalTarget("logs/markers/bronze_all.done")
 
-    def run(self):
-        with self.input().open("r") as f:
-            object_names = [line.strip() for line in f if line.strip()]
+    def _get_filenames(self):
+        if self.source == "minio":
+            with self.input().open("r") as f:
+                return [
+                    os.path.basename(line.strip())
+                    for line in f if line.strip()
+                ]
+        else:
+            raw_dir = settings.raw_data_dir
+            return [f for f in os.listdir(raw_dir) if f.endswith(".csv")]
 
-        if not object_names:
-            raise ValueError("No CSV files discovered in MinIO")
+    def run(self):
+        filenames = self._get_filenames()
+
+        if not filenames:
+            raise ValueError("No CSV files found to load")
 
         tasks = []
-        unmatched = []
+        skipped = []
 
-        for object_name in object_names:
-            basename = os.path.basename(object_name).lower()
-            matched_entity = None
-
-            for prefix, entity in self.ENTITY_MAP.items():
-                if basename.startswith(prefix):
-                    matched_entity = entity
+        for filename in filenames:
+            entity = None
+            for prefix, ent in ENTITY_MAP.items():
+                if filename.lower().startswith(prefix):
+                    entity = ent
                     break
 
-            if matched_entity:
+            if entity:
                 tasks.append(
                     LoadSingleFileBronze(
-                        entity=matched_entity,
-                        object_name=object_name,
+                        entity=entity,
+                        filename=filename,
+                        source=self.source,
                     )
                 )
-                logger.info(f"Routing {object_name} → {matched_entity}")
+                logger.info(f"Queuing: {filename} → bronze.{entity}")
             else:
-                unmatched.append(object_name)
-                logger.warning(f"No entity mapping for file: {object_name}, skipping")
+                skipped.append(filename)
+                logger.warning(f"No entity match for: {filename}, skipping")
 
         if not tasks:
             raise ValueError("No files matched any known entity prefix")
 
         yield tasks
 
-        os.makedirs(os.path.dirname(self.output().path), exist_ok=True)
+        os.makedirs("logs/markers", exist_ok=True)
         with self.output().open("w") as f:
-            f.write(f"loaded {len(tasks)} files\nskipped: {unmatched}")
+            loaded = [t.filename for t in tasks]
+            f.write(f"loaded: {loaded}\nskipped: {skipped}")
+
+        logger.info(
+            f"Bronze complete — {len(tasks)} files loaded, {len(skipped)} skipped")

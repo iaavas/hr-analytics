@@ -18,6 +18,7 @@ dependencies = [
     "luigi>=3.5.0",
     "pandas",
     "luigi",
+    "alembic>=1.13.0",
 ]
 
 [project.optional-dependencies]

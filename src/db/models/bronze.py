@@ -4,7 +4,7 @@ from src.app.database import Base
 
 
 class EmployeeBronze(Base):
-    __tablename__ = "bronze_employee_raw"
+    __tablename__ = "employee_raw"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     client_employee_id = Column(String(50))
@@ -46,22 +46,22 @@ class EmployeeBronze(Base):
 
 
 class TimesheetBronze(Base):
-    __tablename__ = "bronze_timesheet_raw"
+    __tablename__ = "timesheet_raw"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    client_employee_id = Column(String(50))
-    department_id = Column(String(50))
+    client_employee_id = Column(String(255))
+    department_id = Column(String(255))
     department_name = Column(String(255))
-    home_department_id = Column(String(50))
+    home_department_id = Column(String(255))
     home_department_name = Column(String(255))
-    pay_code = Column(String(50))
+    pay_code = Column(String(255))
     punch_in_comment = Column(String(500))
     punch_out_comment = Column(String(500))
     hours_worked = Column(Float)
     punch_apply_date = Column(String(20))
-    punch_in_datetime = Column(String(50))
-    punch_out_datetime = Column(String(50))
-    scheduled_start_datetime = Column(String(50))
-    scheduled_end_datetime = Column(String(50))
+    punch_in_datetime = Column(String(255))
+    punch_out_datetime = Column(String(255))
+    scheduled_start_datetime = Column(String(255))
+    scheduled_end_datetime = Column(String(255))
     created_at = Column(DateTime, default=func.now())
     source_file = Column(String(255))
