@@ -21,6 +21,7 @@ database_url = os.environ.get("DATABASE_URL", config.get_main_option("sqlalchemy
 # For autogenerate: import app Base and models so Alembic sees table definitions
 from src.app.database import Base
 import src.db.models.bronze  # noqa: F401  # register tables with Base.metadata
+import src.db.models.silver  # noqa: F401  # register tables with Base.metadata
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,

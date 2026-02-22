@@ -38,6 +38,12 @@ def init_db():
         conn.commit()
 
     from src.db.models.bronze import EmployeeBronze, TimesheetBronze
+    from src.db.models.silver import (
+        Department,
+        Organization,
+        Employee,
+        Timesheet,
+    )
     Base.metadata.create_all(bind=engine)
 
 
