@@ -8,6 +8,10 @@ class DatabaseSettings(BaseSettings):
     database_url: str = "postgresql://hr_insights:hr_insights@localhost:5432/hr_insights"
     echo: bool = False
 
+    secret_key: str = "your-secret-key-change-in-production"
+    algorithm: str = "HS256"
+    access_token_expire_minutes: int = 30
+
 
 db_settings = DatabaseSettings()
 
@@ -44,6 +48,7 @@ def init_db():
         Employee,
         Timesheet,
     )
+
     Base.metadata.create_all(bind=engine)
 
 
