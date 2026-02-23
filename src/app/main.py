@@ -11,7 +11,7 @@ from src.app.core.security import (
     get_password_hash,
 )
 from src.app.schemas.employee_schema import LoginRequest, TokenResponse
-from src.app.api import employee, timesheet
+from src.app.api import employee, timesheet, analytics
 
 app = FastAPI(
     title="HR Insights API",
@@ -21,6 +21,7 @@ app = FastAPI(
 
 app.include_router(employee.router)
 app.include_router(timesheet.router)
+app.include_router(analytics.router)
 
 security = HTTPBearer()
 
@@ -43,7 +44,8 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
 
     access_token = create_access_token(
         data={"sub": login_data.username},
-        expires_delta=timedelta(minutes=db_settings.access_token_expire_minutes),
+        expires_delta=timedelta(
+            minutes=db_settings.access_token_expire_minutes),
     )
     return TokenResponse(access_token=access_token)
 
@@ -56,4 +58,4 @@ def health_check():
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("src.app.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("src.app.main:app", host="0.0.0.0", port=5173, reload=True)
