@@ -48,6 +48,14 @@ def init_db():
         Employee,
         Timesheet,
     )
+    from src.db.models.gold import (
+        EmployeeMonthlySnapshot,
+        TimesheetDailySummary,
+        DepartmentMonthlyMetrics,
+        EmployeeAttendanceMetrics,
+        HeadcountTrend,
+        OrganizationMetrics,
+    )
 
     Base.metadata.create_all(bind=engine)
 
