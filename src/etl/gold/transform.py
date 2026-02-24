@@ -29,7 +29,8 @@ def get_employees_from_db(db: Session) -> pd.DataFrame:
                 "term_date": emp.term_date,
                 "is_active": emp.is_active,
                 "tenure_days": (
-                    (emp.term_date or date.today() - emp.hire_date).days if emp.hire_date else None
+                    ((emp.term_date or date.today()) - emp.hire_date).days
+                    if emp.hire_date else None
                 ),
                 "is_early_attrition": (
                     not emp.is_active
@@ -122,7 +123,8 @@ def calculate_headcount_trend(
         ]
     )
 
-    early_attrition_rate = (early_attrition_count / new_hires * 100) if new_hires > 0 else 0.0
+    early_attrition_rate = (early_attrition_count /
+                            new_hires * 100) if new_hires > 0 else 0.0
 
     return {
         "year": year,
@@ -171,9 +173,11 @@ def calculate_department_metrics(
             ]
         )
 
-        turnover_rate = (terminations / active_headcount * 100) if active_headcount > 0 else 0.0
+        turnover_rate = (terminations / active_headcount *
+                         100) if active_headcount > 0 else 0.0
 
-        avg_tenure = active_emp["tenure_days"].mean() if len(active_emp) > 0 else None
+        avg_tenure = active_emp["tenure_days"].mean() if len(
+            active_emp) > 0 else None
 
         dept_name = dept_employees.iloc[0].get("department_name")
 
@@ -235,7 +239,8 @@ def calculate_employee_daily_summary(
         return pd.DataFrame()
 
     daily = (
-        timesheets.groupby(["client_employee_id", "work_date", "department_id"])
+        timesheets.groupby(
+            ["client_employee_id", "work_date", "department_id"])
         .agg(
             {
                 "id": "count",
@@ -275,7 +280,8 @@ def calculate_employee_monthly_metrics(
     month_end = (ref_date + pd.offsets.MonthEnd(0)).date()
 
     monthly_data = timesheets[
-        (timesheets["work_date"] >= ref_date) & (timesheets["work_date"] <= month_end)
+        (timesheets["work_date"] >= ref_date) & (
+            timesheets["work_date"] <= month_end)
     ]
 
     if monthly_data.empty:
@@ -293,13 +299,16 @@ def calculate_employee_monthly_metrics(
         avg_hours_per_week = total_hours / 4
 
         late_count = emp_data["is_late"].sum()
-        late_rate = (late_count / total_shifts * 100) if total_shifts > 0 else 0
+        late_rate = (late_count / total_shifts *
+                     100) if total_shifts > 0 else 0
 
         early_count = emp_data["is_early_departure"].sum()
-        early_rate = (early_count / total_shifts * 100) if total_shifts > 0 else 0
+        early_rate = (early_count / total_shifts *
+                      100) if total_shifts > 0 else 0
 
         overtime_count = emp_data["is_overtime"].sum()
-        overtime_rate = (overtime_count / total_shifts * 100) if total_shifts > 0 else 0
+        overtime_rate = (overtime_count / total_shifts *
+                         100) if total_shifts > 0 else 0
 
         avg_variance = emp_data.get("variance_minutes", pd.Series()).mean()
 

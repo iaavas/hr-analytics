@@ -1,8 +1,20 @@
 from datetime import date
-from typing import Optional
+from typing import Any, Optional
 
-from sqlalchemy.orm import Session
+import numpy as np
 import pandas as pd
+from sqlalchemy.orm import Session
+
+
+def _to_native(val: Any) -> Any:
+    """Convert numpy scalars to native Python types for DB/JSON compatibility."""
+    if isinstance(val, (np.floating, np.integer)):
+        return val.item()
+    return val
+
+
+def _native_dict(d: dict) -> dict:
+    return {k: _to_native(v) for k, v in d.items()}
 
 from src.app.database import SessionLocal
 from src.db.models.gold import (
@@ -39,14 +51,18 @@ def _get_month_periods(employees: pd.DataFrame, timesheets: pd.DataFrame) -> pd.
     candidate_dates = []
 
     if not employees.empty:
-        if employees["hire_date"].notna().any():
-            candidate_dates.append(employees["hire_date"].min())
-        if employees["term_date"].notna().any():
-            candidate_dates.append(employees["term_date"].max())
+        hire_dates = employees["hire_date"].dropna()
+        if len(hire_dates) > 0:
+            candidate_dates.append(hire_dates.min())
+        term_dates = employees["term_date"].dropna()
+        if len(term_dates) > 0:
+            candidate_dates.append(term_dates.max())
 
-    if not timesheets.empty and timesheets["work_date"].notna().any():
-        candidate_dates.append(timesheets["work_date"].min())
-        candidate_dates.append(timesheets["work_date"].max())
+    if not timesheets.empty:
+        work_dates = timesheets["work_date"].dropna()
+        if len(work_dates) > 0:
+            candidate_dates.append(work_dates.min())
+            candidate_dates.append(work_dates.max())
 
     if not candidate_dates:
         today = date.today().replace(day=1)
@@ -85,7 +101,7 @@ def _process_month(
 
 def load_headcount_trend(db: Session, employees: pd.DataFrame, year: int, month: int):
     trend_data = calculate_headcount_trend(employees, year, month)
-    trend = HeadcountTrend(**trend_data)
+    trend = HeadcountTrend(**_native_dict(trend_data))
     db.add(trend)
 
 
@@ -99,7 +115,7 @@ def load_department_metrics(
     dept_metrics = calculate_department_metrics(
         employees, timesheets, year, month)
     for metric in dept_metrics:
-        dept = DepartmentMonthlyMetrics(**metric)
+        dept = DepartmentMonthlyMetrics(**_native_dict(metric))
         db.add(dept)
 
 
@@ -119,7 +135,7 @@ def load_employee_monthly_snapshots(db: Session, employees: pd.DataFrame, year: 
             hire_date=emp.get("hire_date"),
             term_date=emp.get("term_date"),
             department_id=emp.get("department_id"),
-            tenure_days=emp.get("tenure_days"),
+            tenure_days=_to_native(emp.get("tenure_days")),
         )
         db.add(snapshot)
 
@@ -132,19 +148,19 @@ def load_timesheet_daily_summary(db: Session, timesheets: pd.DataFrame):
             client_employee_id=row["client_employee_id"],
             work_date=row["work_date"],
             department_id=row.get("department_id"),
-            total_shifts=int(row["total_shifts"]),
-            total_worked_minutes=round(row["total_worked_minutes"], 2)
+            total_shifts=_to_native(int(row["total_shifts"])),
+            total_worked_minutes=_to_native(round(row["total_worked_minutes"], 2))
             if pd.notna(row["total_worked_minutes"])
             else None,
-            total_scheduled_minutes=round(row["total_scheduled_minutes"], 2)
+            total_scheduled_minutes=_to_native(round(row["total_scheduled_minutes"], 2))
             if pd.notna(row["total_scheduled_minutes"])
             else None,
-            total_hours_worked=round(row["total_hours_worked"], 2)
+            total_hours_worked=_to_native(round(row["total_hours_worked"], 2))
             if pd.notna(row["total_hours_worked"])
             else None,
-            late_arrival_count=int(row["late_arrival_count"]),
-            early_departure_count=int(row["early_departure_count"]),
-            overtime_count=int(row["overtime_count"]),
+            late_arrival_count=_to_native(int(row["late_arrival_count"])),
+            early_departure_count=_to_native(int(row["early_departure_count"])),
+            overtime_count=_to_native(int(row["overtime_count"])),
         )
         db.add(summary)
 
@@ -165,7 +181,7 @@ def load_employee_attendance_metrics(
         )
         metric["rolling_avg_hours_4w"] = rolling_avg
 
-        emp_metric = EmployeeAttendanceMetrics(**metric)
+        emp_metric = EmployeeAttendanceMetrics(**_native_dict(metric))
         db.add(emp_metric)
 
 
@@ -245,11 +261,11 @@ def load_organization_metrics(
         total_employees=total_employees,
         active_employees=active_employees,
         total_departments=total_departments,
-        avg_tenure_days=round(avg_tenure, 2) if avg_tenure else None,
-        turnover_rate=round(turnover_rate, 2),
-        avg_late_arrival_rate=round(avg_late_rate, 2),
-        avg_early_departure_rate=round(avg_early_rate, 2),
-        avg_overtime_rate=round(avg_overtime_rate, 2),
+        avg_tenure_days=_to_native(round(avg_tenure, 2)) if avg_tenure else None,
+        turnover_rate=_to_native(round(turnover_rate, 2)),
+        avg_late_arrival_rate=_to_native(round(avg_late_rate, 2)),
+        avg_early_departure_rate=_to_native(round(avg_early_rate, 2)),
+        avg_overtime_rate=_to_native(round(avg_overtime_rate, 2)),
     )
     db.add(org_metrics)
 
