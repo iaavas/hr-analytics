@@ -30,6 +30,13 @@ class TransformEmployeeSilver(luigi.Task):
     def run(self):
 
         with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "TRUNCATE TABLE silver.timesheet, silver.employee, silver.department, silver.organization RESTART IDENTITY CASCADE"
+                )
+            )
+
+        with engine.begin() as conn:
             df = pd.read_sql(
                 text("SELECT * FROM employee_raw"),
                 conn,

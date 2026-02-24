@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 class TransformGoldLayer(luigi.Task):
     year = luigi.IntParameter(default=0)
     month = luigi.IntParameter(default=0)
+    all_months = luigi.BoolParameter(default=False, description="Process full history across all months")
 
     def requires(self):
         return LoadAllSilver()
@@ -23,29 +24,38 @@ class TransformGoldLayer(luigi.Task):
         year = self.year
         month = self.month
 
-        if year == 0 or month == 0:
-            from datetime import date
+        # If explicitly asked for historical processing, ignore year/month hints
+        if self.all_months:
+            run_gold_etl(all_months=True)
+        else:
+            if year == 0 or month == 0:
+                from datetime import date
 
-            today = date.today()
-            year = year or today.year
-            month = month or today.month
+                today = date.today()
+                year = year or today.year
+                month = month or today.month
 
-        run_gold_etl(year=year, month=month)
+            run_gold_etl(year=year, month=month)
 
         os.makedirs("logs/markers", exist_ok=True)
 
         with self.output().open("w") as f:
-            f.write(f"done_{year}_{month}")
+            if self.all_months:
+                f.write("done_all_months")
+            else:
+                f.write(f"done_{year}_{month}")
 
-        logger.info(f"Gold layer complete for {year}-{month:02d}")
+        msg = "Gold layer complete for full history" if self.all_months else f"Gold layer complete for {year}-{month:02d}"
+        logger.info(msg)
 
 
 class LoadAllGold(luigi.Task):
     year = luigi.IntParameter(default=0)
     month = luigi.IntParameter(default=0)
+    all_months = luigi.BoolParameter(default=False, description="Process full history across all months")
 
     def requires(self):
-        return TransformGoldLayer(year=self.year, month=self.month)
+        return TransformGoldLayer(year=self.year, month=self.month, all_months=self.all_months)
 
     def output(self):
         return luigi.LocalTarget("logs/markers/gold_all.done")

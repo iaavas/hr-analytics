@@ -21,6 +21,8 @@ def _scalar_or_none(val: Any):
         return None
     if pd.isna(val):
         return None
+    if isinstance(val, str) and val.strip().lower() == "nan":
+        return None
     return val
 
 
@@ -83,9 +85,11 @@ class SilverLoader:
                     last_name=r.last_name,
                     organization_id=r.organization_id,
                     department_id=r.department_id,
-                    manager_employee_id=r.manager_employee_id,
-                    hire_date=r.hire_date,
-                    term_date=r.term_date,
+                    manager_employee_id=_scalar_or_none(
+                        getattr(r, "manager_employee_id", None)
+                    ),
+                    hire_date=_scalar_or_none(getattr(r, "hire_date", None)),
+                    term_date=_scalar_or_none(getattr(r, "term_date", None)),
                     is_active=r.is_active,
                     created_at=datetime.utcnow(),
                 )
@@ -99,6 +103,19 @@ class SilverLoader:
     def load_timesheet_data(self, df: pd.DataFrame):
         self.db.query(TimesheetSilver).delete()
         self.db.commit()
+
+        valid_employee_ids = {
+            row[0]
+            for row in self.db.query(EmployeeSilver.client_employee_id).all()
+        }
+        original_count = len(df)
+        df = df[df["client_employee_id"].astype(str).isin(valid_employee_ids)]
+        dropped = original_count - len(df)
+        if dropped:
+            logger.warning(
+                "Dropped %d timesheet rows with unknown client_employee_id (not in employee table)",
+                dropped,
+            )
 
         records = []
         for r in df.itertuples():

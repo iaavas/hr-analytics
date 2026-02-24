@@ -34,6 +34,55 @@ def clear_gold_tables(db: Session):
     db.commit()
 
 
+def _get_month_periods(employees: pd.DataFrame, timesheets: pd.DataFrame) -> pd.PeriodIndex:
+    """Return continuous month periods covering all known employee/timesheet dates."""
+    candidate_dates = []
+
+    if not employees.empty:
+        if employees["hire_date"].notna().any():
+            candidate_dates.append(employees["hire_date"].min())
+        if employees["term_date"].notna().any():
+            candidate_dates.append(employees["term_date"].max())
+
+    if not timesheets.empty and timesheets["work_date"].notna().any():
+        candidate_dates.append(timesheets["work_date"].min())
+        candidate_dates.append(timesheets["work_date"].max())
+
+    if not candidate_dates:
+        today = date.today().replace(day=1)
+        return pd.period_range(start=today, end=today, freq="M")
+
+    start = pd.to_datetime(min(candidate_dates)).to_period("M")
+    end = pd.to_datetime(max(candidate_dates)).to_period("M")
+    return pd.period_range(start=start, end=end, freq="M")
+
+
+def _process_month(
+    db: Session,
+    employees: pd.DataFrame,
+    timesheets: pd.DataFrame,
+    year: int,
+    month: int,
+):
+    print(f"  Processing metrics for {year}-{month:02d}...")
+
+    load_headcount_trend(db, employees, year, month)
+    db.commit()
+
+    load_department_metrics(db, employees, timesheets, year, month)
+    db.commit()
+
+    load_employee_monthly_snapshots(db, employees, year, month)
+    db.commit()
+
+    if not timesheets.empty:
+        load_employee_attendance_metrics(db, timesheets, year, month)
+        db.commit()
+
+    load_organization_metrics(db, employees, timesheets, year, month)
+    db.commit()
+
+
 def load_headcount_trend(db: Session, employees: pd.DataFrame, year: int, month: int):
     trend_data = calculate_headcount_trend(employees, year, month)
     trend = HeadcountTrend(**trend_data)
@@ -205,16 +254,24 @@ def load_organization_metrics(
     db.add(org_metrics)
 
 
-def run_gold_etl(year: Optional[int] = None, month: Optional[int] = None):
-    if year is None or month is None:
-        today = date.today()
-        year = year or today.year
-        month = month or today.month
+def run_gold_etl(
+    year: Optional[int] = None,
+    month: Optional[int] = None,
+    all_months: bool = False,
+):
+    """Run gold ETL.
+
+    If ``all_months`` is True *or* either ``year`` or ``month`` is omitted, the
+    loader will process every month that appears in the silver data range.
+    Otherwise it processes only the specified year/month.
+    """
+
+    process_all = all_months or year is None or month is None
 
     db: Session = SessionLocal()
 
     try:
-        print(f"Running Gold ETL for {year}-{month:02d}...")
+        print("Running Gold ETL...")
 
         print("  Loading silver data...")
         employees = get_employees_from_db(db)
@@ -230,34 +287,25 @@ def run_gold_etl(year: Optional[int] = None, month: Optional[int] = None):
         print("  Clearing existing gold data...")
         clear_gold_tables(db)
 
-        print("  Loading headcount trend...")
-        load_headcount_trend(db, employees, year, month)
-        db.commit()
-
-        print("  Loading department metrics...")
-        load_department_metrics(db, employees, timesheets, year, month)
-        db.commit()
-
-        print("  Loading employee monthly snapshots...")
-        load_employee_monthly_snapshots(db, employees, year, month)
-        db.commit()
-
         if not timesheets.empty:
-            print("  Loading timesheet daily summary...")
+            print("  Loading timesheet daily summary across all dates...")
             load_timesheet_daily_summary(db, timesheets)
             db.commit()
-
-            print("  Loading employee attendance metrics...")
-            load_employee_attendance_metrics(db, timesheets, year, month)
-            db.commit()
         else:
-            print("  No timesheet data to process")
+            print("  No timesheet data to process for daily summary")
 
-        print("  Loading organization metrics...")
-        load_organization_metrics(db, employees, timesheets, year, month)
-        db.commit()
+        if process_all:
+            periods = _get_month_periods(employees, timesheets)
+            print(
+                f"  Processing full history: {len(periods)} month(s) from "
+                f"{periods[0].year}-{periods[0].month:02d} to {periods[-1].year}-{periods[-1].month:02d}"
+            )
+            for p in periods:
+                _process_month(db, employees, timesheets, p.year, p.month)
+        else:
+            _process_month(db, employees, timesheets, int(year), int(month))
 
-        print(f"Gold ETL completed for {year}-{month:02d}")
+        print("Gold ETL completed")
 
     except Exception as e:
         print(f"Error in Gold ETL: {e}")
@@ -268,4 +316,4 @@ def run_gold_etl(year: Optional[int] = None, month: Optional[int] = None):
 
 
 if __name__ == "__main__":
-    run_gold_etl()
+    run_gold_etl(all_months=True)

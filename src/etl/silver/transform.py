@@ -91,6 +91,17 @@ def clean_employee(df: pd.DataFrame) -> pd.DataFrame:
         lambda x: round(x / 30, 2) if x else None
     )
 
+    # Normalize manager IDs to string, keeping missing as None
+    df["manager_employee_id"] = df["manager_employee_id"].apply(
+        lambda m: str(m).strip() if pd.notna(m) and str(m).strip() != "" else None
+    )
+
+    # Drop manager references that don't exist in the current dataset to avoid FK failures
+    emp_ids = set(df["client_employee_id"].astype(str))
+    df["manager_employee_id"] = df["manager_employee_id"].apply(
+        lambda m: m if m in emp_ids else None
+    )
+
     df["is_active"] = df.apply(
         lambda r: bool(r["active_status_bool"])
         if pd.notna(r["active_status_bool"])
