@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from src.app.database import get_db
-from src.app.core.security import get_current_user
+from src.app.core.security import get_current_user, require_roles, ROLE_ADMIN
 from src.app.schemas.employee_schema import (
     EmployeeCreate,
     EmployeeRead,
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/employees", tags=["employees"])
 def create_employee(
     employee: EmployeeCreate,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_roles([ROLE_ADMIN])),
 ):
     created = employee_service.create_employee(db, employee)
     return ApiResponse.ok(
@@ -57,7 +57,7 @@ def update_employee(
     employee_id: str,
     employee: EmployeeUpdate,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_roles([ROLE_ADMIN])),
 ):
     updated = employee_service.update_employee(db, employee_id, employee)
     return ApiResponse.ok(
@@ -70,7 +70,7 @@ def update_employee(
 def delete_employee(
     employee_id: str,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_roles([ROLE_ADMIN])),
 ):
     employee_service.delete_employee(db, employee_id)
     return ApiResponse.ok(data=None, message="Employee removed successfully.")
