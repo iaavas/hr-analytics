@@ -391,7 +391,7 @@ def calculate_rolling_avg_hours(
     current_date: date,
     weeks: int = 4,
 ) -> Optional[float]:
-    start_date = current_date - timedelta(weeks=weeks * 7)
+    start_date = current_date - timedelta(weeks=weeks)
 
     emp_data = timesheets[
         (timesheets["client_employee_id"] == employee_id)

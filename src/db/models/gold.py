@@ -47,10 +47,6 @@ class TimesheetDailySummary(Base):
     late_arrival_count = sa.Column(sa.Integer)
     early_departure_count = sa.Column(sa.Integer)
     overtime_count = sa.Column(sa.Integer)
-    late_minutes_total = sa.Column(sa.Float)
-    early_minutes_total = sa.Column(sa.Float)
-    overtime_minutes_total = sa.Column(sa.Float)
-    avg_variance_minutes = sa.Column(sa.Float)
     created_at = sa.Column(sa.DateTime, server_default=func.now())
 
 
