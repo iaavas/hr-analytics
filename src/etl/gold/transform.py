@@ -82,7 +82,8 @@ def get_timesheets_from_db(db: Session) -> pd.DataFrame:
     df["work_date"] = pd.to_datetime(df["work_date"], errors="coerce").dt.date
 
     df["worked_minutes"] = pd.to_numeric(df["worked_minutes"], errors="coerce")
-    df["scheduled_minutes"] = pd.to_numeric(df["scheduled_minutes"], errors="coerce")
+    df["scheduled_minutes"] = pd.to_numeric(
+        df["scheduled_minutes"], errors="coerce")
 
     df["variance_minutes"] = (
         df["worked_minutes"] - df["scheduled_minutes"]
@@ -108,7 +109,8 @@ def get_timesheets_from_db(db: Session) -> pd.DataFrame:
         df["early_departure_minutes"].notna(), other=0
     )
     df["early_departure_minutes"] = df["early_departure_minutes"].clip(lower=0)
-    df.loc[df["early_departure_minutes"] <= GRACE_MINUTES, "early_departure_minutes"] = 0
+    df.loc[df["early_departure_minutes"] <=
+           GRACE_MINUTES, "early_departure_minutes"] = 0
 
     df["overtime_minutes"] = df["variance_minutes"]
     df.loc[df["overtime_minutes"].isna(), "overtime_minutes"] = 0
@@ -118,7 +120,8 @@ def get_timesheets_from_db(db: Session) -> pd.DataFrame:
     df["is_early_departure"] = df["early_departure_minutes"] > 0
     df["is_overtime"] = df["overtime_minutes"] > 0
 
-    df["day_of_week"] = pd.to_datetime(df["work_date"], errors="coerce").dt.day_name()
+    df["day_of_week"] = pd.to_datetime(
+        df["work_date"], errors="coerce").dt.day_name()
 
     return df
 

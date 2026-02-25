@@ -1,3 +1,21 @@
+from src.app.database import SessionLocal
+from src.etl.gold.transform import (
+    get_employees_from_db,
+    get_timesheets_from_db,
+    calculate_headcount_trend,
+    calculate_department_metrics,
+    calculate_employee_monthly_metrics,
+    calculate_employee_daily_summary,
+    calculate_rolling_avg_hours,
+)
+from src.db.models.gold import (
+    EmployeeMonthlySnapshot,
+    TimesheetDailySummary,
+    DepartmentMonthlyMetrics,
+    EmployeeAttendanceMetrics,
+    HeadcountTrend,
+    OrganizationMetrics,
+)
 from datetime import date
 from typing import Any, Optional
 
@@ -15,25 +33,6 @@ def _to_native(val: Any) -> Any:
 
 def _native_dict(d: dict) -> dict:
     return {k: _to_native(v) for k, v in d.items()}
-
-from src.app.database import SessionLocal
-from src.db.models.gold import (
-    EmployeeMonthlySnapshot,
-    TimesheetDailySummary,
-    DepartmentMonthlyMetrics,
-    EmployeeAttendanceMetrics,
-    HeadcountTrend,
-    OrganizationMetrics,
-)
-from src.etl.gold.transform import (
-    get_employees_from_db,
-    get_timesheets_from_db,
-    calculate_headcount_trend,
-    calculate_department_metrics,
-    calculate_employee_monthly_metrics,
-    calculate_employee_daily_summary,
-    calculate_rolling_avg_hours,
-)
 
 
 def clear_gold_tables(db: Session):
@@ -149,16 +148,19 @@ def load_timesheet_daily_summary(db: Session, timesheets: pd.DataFrame):
             work_date=row["work_date"],
             department_id=row.get("department_id"),
             total_shifts=_to_native(int(row["total_shifts"])),
-            total_worked_minutes=_to_native(round(row["total_worked_minutes"], 2))
+            total_worked_minutes=_to_native(
+                round(row["total_worked_minutes"], 2))
             if pd.notna(row["total_worked_minutes"])
             else None,
-            total_scheduled_minutes=_to_native(round(row["total_scheduled_minutes"], 2))
+            total_scheduled_minutes=_to_native(
+                round(row["total_scheduled_minutes"], 2))
             if pd.notna(row["total_scheduled_minutes"])
             else None,
             total_hours_worked=_to_native(round(row["total_hours_worked"], 2))
             if pd.notna(row["total_hours_worked"])
             else None,
-            late_minutes_total=_to_native(round(row.get("late_minutes_total", 0), 2))
+            late_minutes_total=_to_native(
+                round(row.get("late_minutes_total", 0), 2))
             if pd.notna(row.get("late_minutes_total"))
             else None,
             early_minutes_total=_to_native(
@@ -166,14 +168,17 @@ def load_timesheet_daily_summary(db: Session, timesheets: pd.DataFrame):
             )
             if pd.notna(row.get("early_minutes_total"))
             else None,
-            overtime_minutes_total=_to_native(round(row.get("overtime_minutes_total", 0), 2))
+            overtime_minutes_total=_to_native(
+                round(row.get("overtime_minutes_total", 0), 2))
             if pd.notna(row.get("overtime_minutes_total"))
             else None,
-            avg_variance_minutes=_to_native(round(row.get("avg_variance_minutes", 0), 2))
+            avg_variance_minutes=_to_native(
+                round(row.get("avg_variance_minutes", 0), 2))
             if pd.notna(row.get("avg_variance_minutes"))
             else None,
             late_arrival_count=_to_native(int(row["late_arrival_count"])),
-            early_departure_count=_to_native(int(row["early_departure_count"])),
+            early_departure_count=_to_native(
+                int(row["early_departure_count"])),
             overtime_count=_to_native(int(row["overtime_count"])),
         )
         db.add(summary)
@@ -275,7 +280,8 @@ def load_organization_metrics(
         total_employees=total_employees,
         active_employees=active_employees,
         total_departments=total_departments,
-        avg_tenure_days=_to_native(round(avg_tenure, 2)) if avg_tenure else None,
+        avg_tenure_days=_to_native(
+            round(avg_tenure, 2)) if avg_tenure else None,
         turnover_rate=_to_native(round(turnover_rate, 2)),
         avg_late_arrival_rate=_to_native(round(avg_late_rate, 2)),
         avg_early_departure_rate=_to_native(round(avg_early_rate, 2)),
