@@ -24,6 +24,7 @@ def get_employees_from_db(db: Session) -> pd.DataFrame:
                 "first_name": emp.first_name,
                 "last_name": emp.last_name,
                 "department_id": emp.department_id,
+                "department_name": emp.department.department_name if emp.department else None,
                 "job_title": emp.job_title,
                 "hire_date": emp.hire_date,
                 "term_date": emp.term_date,
@@ -62,26 +63,64 @@ def get_timesheets_from_db(db: Session) -> pd.DataFrame:
                 "worked_minutes": ts.worked_minutes,
                 "scheduled_minutes": ts.scheduled_minutes,
                 "hours_worked": ts.hours_worked,
-                "is_late": (
-                    ts.punch_in_datetime
-                    and ts.scheduled_start_datetime
-                    and (ts.punch_in_datetime - ts.scheduled_start_datetime).total_seconds() / 60
-                    > GRACE_MINUTES
-                ),
-                "is_early_departure": (
-                    ts.punch_out_datetime
-                    and ts.scheduled_end_datetime
-                    and (ts.scheduled_end_datetime - ts.punch_out_datetime).total_seconds() / 60
-                    > GRACE_MINUTES
-                ),
-                "is_overtime": (
-                    ts.worked_minutes
-                    and ts.scheduled_minutes
-                    and ts.worked_minutes - ts.scheduled_minutes > GRACE_MINUTES
-                ),
             }
         )
-    return pd.DataFrame(data)
+    df = pd.DataFrame(data)
+
+    if df.empty:
+        return df
+
+    datetime_cols = [
+        "punch_in_datetime",
+        "punch_out_datetime",
+        "scheduled_start_datetime",
+        "scheduled_end_datetime",
+    ]
+    for col in datetime_cols:
+        df[col] = pd.to_datetime(df[col], errors="coerce")
+
+    df["work_date"] = pd.to_datetime(df["work_date"], errors="coerce").dt.date
+
+    df["worked_minutes"] = pd.to_numeric(df["worked_minutes"], errors="coerce")
+    df["scheduled_minutes"] = pd.to_numeric(df["scheduled_minutes"], errors="coerce")
+
+    df["variance_minutes"] = (
+        df["worked_minutes"] - df["scheduled_minutes"]
+    ).where(df["worked_minutes"].notna() & df["scheduled_minutes"].notna())
+
+    df["lateness_minutes"] = (
+        (df["punch_in_datetime"] - df["scheduled_start_datetime"])
+        .dt.total_seconds()
+        .div(60)
+    )
+    df["lateness_minutes"] = df["lateness_minutes"].where(
+        df["lateness_minutes"].notna(), other=0
+    )
+    df["lateness_minutes"] = df["lateness_minutes"].clip(lower=0)
+    df.loc[df["lateness_minutes"] <= GRACE_MINUTES, "lateness_minutes"] = 0
+
+    df["early_departure_minutes"] = (
+        (df["scheduled_end_datetime"] - df["punch_out_datetime"])
+        .dt.total_seconds()
+        .div(60)
+    )
+    df["early_departure_minutes"] = df["early_departure_minutes"].where(
+        df["early_departure_minutes"].notna(), other=0
+    )
+    df["early_departure_minutes"] = df["early_departure_minutes"].clip(lower=0)
+    df.loc[df["early_departure_minutes"] <= GRACE_MINUTES, "early_departure_minutes"] = 0
+
+    df["overtime_minutes"] = df["variance_minutes"]
+    df.loc[df["overtime_minutes"].isna(), "overtime_minutes"] = 0
+    df.loc[df["overtime_minutes"] <= GRACE_MINUTES, "overtime_minutes"] = 0
+
+    df["is_late"] = df["lateness_minutes"] > 0
+    df["is_early_departure"] = df["early_departure_minutes"] > 0
+    df["is_overtime"] = df["overtime_minutes"] > 0
+
+    df["day_of_week"] = pd.to_datetime(df["work_date"], errors="coerce").dt.day_name()
+
+    return df
 
 
 def calculate_headcount_trend(
@@ -247,6 +286,10 @@ def calculate_employee_daily_summary(
                 "worked_minutes": "sum",
                 "scheduled_minutes": "sum",
                 "hours_worked": "sum",
+                "lateness_minutes": "sum",
+                "early_departure_minutes": "sum",
+                "overtime_minutes": "sum",
+                "variance_minutes": "mean",
                 "is_late": "sum",
                 "is_early_departure": "sum",
                 "is_overtime": "sum",
@@ -263,6 +306,10 @@ def calculate_employee_daily_summary(
         "total_worked_minutes",
         "total_scheduled_minutes",
         "total_hours_worked",
+        "late_minutes_total",
+        "early_minutes_total",
+        "overtime_minutes_total",
+        "avg_variance_minutes",
         "late_arrival_count",
         "early_departure_count",
         "overtime_count",

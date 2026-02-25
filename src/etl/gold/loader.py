@@ -158,6 +158,20 @@ def load_timesheet_daily_summary(db: Session, timesheets: pd.DataFrame):
             total_hours_worked=_to_native(round(row["total_hours_worked"], 2))
             if pd.notna(row["total_hours_worked"])
             else None,
+            late_minutes_total=_to_native(round(row.get("late_minutes_total", 0), 2))
+            if pd.notna(row.get("late_minutes_total"))
+            else None,
+            early_minutes_total=_to_native(
+                round(row.get("early_minutes_total", 0), 2)
+            )
+            if pd.notna(row.get("early_minutes_total"))
+            else None,
+            overtime_minutes_total=_to_native(round(row.get("overtime_minutes_total", 0), 2))
+            if pd.notna(row.get("overtime_minutes_total"))
+            else None,
+            avg_variance_minutes=_to_native(round(row.get("avg_variance_minutes", 0), 2))
+            if pd.notna(row.get("avg_variance_minutes"))
+            else None,
             late_arrival_count=_to_native(int(row["late_arrival_count"])),
             early_departure_count=_to_native(int(row["early_departure_count"])),
             overtime_count=_to_native(int(row["overtime_count"])),
