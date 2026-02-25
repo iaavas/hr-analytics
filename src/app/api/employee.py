@@ -1,6 +1,4 @@
-from typing import List
-
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from src.app.database import get_db
@@ -9,49 +7,52 @@ from src.app.schemas.employee_schema import (
     EmployeeCreate,
     EmployeeRead,
     EmployeeUpdate,
-    LoginRequest,
-    TokenResponse,
 )
+from src.app.schemas.response_schema import ApiResponse
 from src.app.services import employee_service
 
 router = APIRouter(prefix="/employees", tags=["employees"])
 
 
-@router.post("", response_model=EmployeeRead, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ApiResponse, status_code=status.HTTP_201_CREATED)
 def create_employee(
     employee: EmployeeCreate,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    return employee_service.create_employee(db, employee)
+    created = employee_service.create_employee(db, employee)
+    return ApiResponse.ok(
+        data=EmployeeRead.model_validate(created).model_dump(),
+        message="Employee created successfully.",
+    )
 
 
-@router.get("", response_model=List[EmployeeRead])
+@router.get("", response_model=ApiResponse)
 def get_employees(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    return employee_service.get_all_employees(db, skip=skip, limit=limit)
+    employees = employee_service.get_all_employees(db, skip=skip, limit=limit)
+    data = [EmployeeRead.model_validate(e).model_dump() for e in employees]
+    return ApiResponse.ok(data=data, message="Retrieved list of employees.")
 
 
-@router.get("/{employee_id}", response_model=EmployeeRead)
+@router.get("/{employee_id}", response_model=ApiResponse)
 def get_employee(
     employee_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    employee = employee_service.get_employee_by_id(db, employee_id)
-    if not employee:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Employee {employee_id} not found",
-        )
-    return employee
+    employee = employee_service.get_employee_or_raise(db, employee_id)
+    return ApiResponse.ok(
+        data=EmployeeRead.model_validate(employee).model_dump(),
+        message="Employee retrieved successfully.",
+    )
 
 
-@router.patch("/{employee_id}", response_model=EmployeeRead)
+@router.patch("/{employee_id}", response_model=ApiResponse)
 def update_employee(
     employee_id: str,
     employee: EmployeeUpdate,
@@ -59,23 +60,17 @@ def update_employee(
     current_user: dict = Depends(get_current_user),
 ):
     updated = employee_service.update_employee(db, employee_id, employee)
-    if not updated:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Employee {employee_id} not found",
-        )
-    return updated
+    return ApiResponse.ok(
+        data=EmployeeRead.model_validate(updated).model_dump(),
+        message="Employee updated successfully.",
+    )
 
 
-@router.delete("/{employee_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{employee_id}", response_model=ApiResponse)
 def delete_employee(
     employee_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    success = employee_service.delete_employee(db, employee_id)
-    if not success:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Employee {employee_id} not found",
-        )
+    employee_service.delete_employee(db, employee_id)
+    return ApiResponse.ok(data=None, message="Employee removed successfully.")
