@@ -1,9 +1,12 @@
+"""Standard API response envelope: success, data, message, and optional error. Used by all endpoints."""
+
 from typing import Any, Optional
 
 from pydantic import BaseModel, model_serializer
 
 
 class ApiResponse(BaseModel):
+    """All API responses use this shape. success and message always present; data and error as needed."""
     success: bool
     data: Optional[Any] = None
     message: str = ""

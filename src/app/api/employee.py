@@ -1,3 +1,4 @@
+
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
@@ -20,6 +21,7 @@ def create_employee(
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_roles([ROLE_ADMIN])),
 ):
+    """Create a new employee. Requires admin role."""
     created = employee_service.create_employee(db, employee)
     return ApiResponse.ok(
         data=EmployeeRead.model_validate(created).model_dump(),
@@ -34,6 +36,7 @@ def get_employees(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
+    """List employees with optional pagination (skip, limit)."""
     employees = employee_service.get_all_employees(db, skip=skip, limit=limit)
     data = [EmployeeRead.model_validate(e).model_dump() for e in employees]
     return ApiResponse.ok(data=data, message="Retrieved list of employees.")
@@ -45,6 +48,7 @@ def get_employee(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
+    """Get a single employee by client_employee_id. Returns 404 if not found."""
     employee = employee_service.get_employee_or_raise(db, employee_id)
     return ApiResponse.ok(
         data=EmployeeRead.model_validate(employee).model_dump(),
@@ -59,6 +63,7 @@ def update_employee(
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_roles([ROLE_ADMIN])),
 ):
+    """Update an existing employee by client_employee_id. Partial updates supported. Requires admin role."""
     updated = employee_service.update_employee(db, employee_id, employee)
     return ApiResponse.ok(
         data=EmployeeRead.model_validate(updated).model_dump(),
@@ -72,5 +77,6 @@ def delete_employee(
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_roles([ROLE_ADMIN])),
 ):
+    """Delete an employee by client_employee_id. Requires admin role."""
     employee_service.delete_employee(db, employee_id)
     return ApiResponse.ok(data=None, message="Employee removed successfully.")

@@ -20,6 +20,7 @@ app = FastAPI(
 
 
 def _normalize_error_detail(detail) -> str:
+    """Turn HTTPException detail (str, list, or dict) into a single string for the API response."""
     if detail is None:
         return "An error occurred."
     if isinstance(detail, str):
@@ -76,6 +77,7 @@ app.include_router(analytics.router)
 
 @app.get("/health", response_model=ApiResponse)
 def health_check():
+    """Return service health status. No authentication required."""
     return ApiResponse.ok(data={"status": "healthy"}, message="Service is running and healthy.")
 
 

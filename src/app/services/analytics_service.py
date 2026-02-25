@@ -1,3 +1,5 @@
+"""Analytics queries against gold-layer models: headcount, department metrics, attendance, organization KPIs, daily timesheet summary."""
+
 from typing import List, Optional
 
 from sqlalchemy.exc import SQLAlchemyError

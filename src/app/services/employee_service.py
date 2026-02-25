@@ -1,3 +1,5 @@
+"""Employee business logic: CRUD against the silver-layer Employee model. Raises NotFoundError or ServiceError on failure."""
+
 from typing import List, Optional
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -9,6 +11,7 @@ from src.db.models.silver import Employee
 
 
 def get_employee_by_id(db: Session, employee_id: str) -> Optional[Employee]:
+    """Return the employee with the given client_employee_id, or None."""
     try:
         return db.query(Employee).filter(Employee.client_employee_id == employee_id).first()
     except SQLAlchemyError as e:
@@ -16,6 +19,7 @@ def get_employee_by_id(db: Session, employee_id: str) -> Optional[Employee]:
 
 
 def get_employee_or_raise(db: Session, employee_id: str) -> Employee:
+    """Return the employee or raise NotFoundError."""
     employee = get_employee_by_id(db, employee_id)
     if not employee:
         raise NotFoundError("Employee", employee_id)
@@ -23,6 +27,7 @@ def get_employee_or_raise(db: Session, employee_id: str) -> Employee:
 
 
 def create_employee(db: Session, employee_data: EmployeeCreate) -> Employee:
+    """Persist a new employee and return the created instance."""
     try:
         employee = Employee(**employee_data.model_dump())
         db.add(employee)
@@ -35,6 +40,7 @@ def create_employee(db: Session, employee_data: EmployeeCreate) -> Employee:
 
 
 def get_all_employees(db: Session, skip: int = 0, limit: int = 100) -> List[Employee]:
+    """Return a paginated list of employees."""
     try:
         return db.query(Employee).offset(skip).limit(limit).all()
     except SQLAlchemyError as e:
@@ -44,6 +50,7 @@ def get_all_employees(db: Session, skip: int = 0, limit: int = 100) -> List[Empl
 def update_employee(
     db: Session, employee_id: str, employee_data: EmployeeUpdate
 ) -> Employee:
+    """Update an employee by client_employee_id with only the provided fields. Raises NotFoundError if not found."""
     employee = get_employee_or_raise(db, employee_id)
     try:
         update_data = employee_data.model_dump(exclude_unset=True)
@@ -58,6 +65,7 @@ def update_employee(
 
 
 def delete_employee(db: Session, employee_id: str) -> None:
+    """Delete the employee by client_employee_id. Raises NotFoundError if not found."""
     employee = get_employee_or_raise(db, employee_id)
     try:
         db.delete(employee)

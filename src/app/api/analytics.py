@@ -1,3 +1,5 @@
+"""Analytics API. Pre-aggregated metrics from gold layer: headcount, departments, attendance, organization, daily timesheet summary."""
+
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
@@ -19,6 +21,7 @@ router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 
 def _serialize_list(schema, items):
+    """Map ORM objects to list of dicts via the given Pydantic schema."""
     return [schema.model_validate(x).model_dump() for x in items]
 
 
@@ -30,6 +33,7 @@ def get_headcount_trend(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
+    """Headcount trend over time. Optional year/month filter; limit caps number of rows (max 24)."""
     data = analytics_service.get_headcount_trend(db, year, month, limit)
     return ApiResponse.ok(
         data=_serialize_list(HeadcountTrendRead, data),
@@ -46,6 +50,7 @@ def get_department_metrics(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
+    """Department-level metrics (headcount, turnover, tenure, attendance rates). Optional filters; limit max 200."""
     data = analytics_service.get_department_metrics(
         db, department_id, year, month, limit
     )
@@ -64,6 +69,7 @@ def get_employee_attendance(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
+    """Attendance metrics for a single employee. Returns 404 if employee not found. Limit max 24."""
     data = analytics_service.get_employee_attendance(
         db, employee_id, year, month, limit
     )
@@ -82,6 +88,7 @@ def get_all_employee_attendance(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
+    """Attendance metrics for all employees. Optional year/month; pagination via skip and limit (max 200)."""
     data = analytics_service.get_all_employee_attendance(
         db, year, month, limit, skip
     )
@@ -99,6 +106,7 @@ def get_organization_metrics(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
+    """Organization-wide KPIs over time. Optional year/month; limit max 24."""
     data = analytics_service.get_organization_metrics(db, year, month, limit)
     return ApiResponse.ok(
         data=_serialize_list(OrganizationMetricsRead, data),
@@ -116,6 +124,7 @@ def get_timesheet_daily_summary(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
+    """Daily timesheet summary. Optional employee_id and date range (YYYY-MM-DD). Pagination via skip and limit (max 500)."""
     data = analytics_service.get_timesheet_daily_summary(
         db, employee_id, start_date, end_date, limit, skip
     )

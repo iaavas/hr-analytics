@@ -1,4 +1,3 @@
-"""Authentication routes: login (token)."""
 
 from datetime import timedelta
 
@@ -16,6 +15,7 @@ router = APIRouter(tags=["auth"])
 
 @router.post("/token", response_model=ApiResponse)
 def login(login_data: LoginRequest):
+    """Authenticate with username and password. Returns a JWT access token for use in the Authorization header."""
     user = get_user_by_username(login_data.username)
     if not user or not verify_password(login_data.password, user["password_hash"]):
         raise HTTPException(

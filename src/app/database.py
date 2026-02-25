@@ -1,3 +1,5 @@
+"""Database engine, session factory, and init. Uses bronze/silver/gold schemas. DATABASE_URL and JWT settings via BaseSettings."""
+
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 from pydantic_settings import BaseSettings
@@ -25,6 +27,7 @@ Base = declarative_base()
 
 
 def get_db():
+    """FastAPI dependency that yields a DB session and closes it after the request."""
     db = SessionLocal()
     try:
         yield db

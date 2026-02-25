@@ -1,3 +1,5 @@
+"""Timesheet read-only service. Queries the silver-layer Timesheet model with optional filters."""
+
 from datetime import date
 from typing import List, Optional
 
@@ -12,6 +14,7 @@ from src.db.models.silver import Timesheet
 def get_all_timesheets(
     db: Session, skip: int = 0, limit: int = 100
 ) -> List[Timesheet]:
+    """Return a paginated list of all timesheets."""
     try:
         return db.query(Timesheet).offset(skip).limit(limit).all()
     except SQLAlchemyError as e:
@@ -21,6 +24,7 @@ def get_all_timesheets(
 def get_timesheets_by_employee(
     db: Session, employee_id: str, skip: int = 0, limit: int = 100
 ) -> List[Timesheet]:
+    """Return timesheets for the given employee. Raises NotFoundError if employee does not exist."""
     employee_service.get_employee_or_raise(db, employee_id)
     try:
         return (
@@ -42,6 +46,7 @@ def get_timesheets_by_date_range(
     skip: int = 0,
     limit: int = 100,
 ) -> List[Timesheet]:
+    """Return timesheets in the date range, optionally filtered by employee. Validates employee exists if provided."""
     if employee_id:
         employee_service.get_employee_or_raise(db, employee_id)
     try:

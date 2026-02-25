@@ -1,3 +1,5 @@
+"""Timesheet read-only API. List and filter timesheets by employee or date range."""
+
 from datetime import date
 from typing import Optional
 
@@ -20,6 +22,7 @@ def get_timesheets(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
+    """List all timesheets with optional pagination."""
     timesheets = timesheet_service.get_all_timesheets(db, skip=skip, limit=limit)
     data = [TimesheetRead.model_validate(t).model_dump() for t in timesheets]
     return ApiResponse.ok(
@@ -35,6 +38,7 @@ def get_timesheets_by_employee(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
+    """List timesheets for a specific employee by client_employee_id. Returns 404 if employee not found."""
     timesheets = timesheet_service.get_timesheets_by_employee(
         db, employee_id, skip=skip, limit=limit
     )
@@ -55,6 +59,7 @@ def filter_timesheets(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
+    """List timesheets in a date range, optionally filtered by employee. start_date and end_date are required."""
     timesheets = timesheet_service.get_timesheets_by_date_range(
         db, start_date, end_date, employee_id, skip=skip, limit=limit
     )

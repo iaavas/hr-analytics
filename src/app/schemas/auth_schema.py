@@ -1,3 +1,5 @@
+"""Request and response models for authentication (login and token)."""
+
 from pydantic import BaseModel
 
 

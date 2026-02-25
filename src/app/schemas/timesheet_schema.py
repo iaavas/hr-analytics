@@ -1,3 +1,5 @@
+"""Pydantic models for timesheet read. Used by the timesheets API (read-only)."""
+
 from datetime import date, datetime
 from typing import Optional
 

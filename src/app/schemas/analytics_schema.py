@@ -1,3 +1,5 @@
+"""Pydantic models for analytics API responses (gold-layer metrics: headcount, departments, attendance, organization, daily summary)."""
+
 from datetime import date, datetime
 from typing import Optional
 
