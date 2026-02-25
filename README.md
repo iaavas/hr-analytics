@@ -127,12 +127,28 @@ The API lives under `src/app/`:
 
 ETL and data models live under `src/etl/`, `src/db/`, and related modules.
 
-## Configuration
+## Environment variables
 
-- **API**: `API_HOST`, `API_PORT`, `API_DEBUG`, `API_ENV_NAME`, `API_RELOAD` (see `src.app.core.config`).
-- **Database and JWT**: `DATABASE_URL`, and in `database.DatabaseSettings`: `echo`, `secret_key`, `algorithm`, `access_token_expire_minutes`. Use environment or a `.env` file; the database module uses pydantic-settings with no prefix for these.
+| Variable | Default | Used by |
+|----------|---------|--------|
+| `DATABASE_URL` | `postgresql://hr_insights:hr_insights@localhost:5432/hr_insights` | DB, ETL |
+| `HR_INSIGHTS_MINIO_ENDPOINT` | `localhost:9000` | ETL (MinIO) |
+| `HR_INSIGHTS_MINIO_ACCESS_KEY` | `minioadmin` | ETL |
+| `HR_INSIGHTS_MINIO_SECRET_KEY` | `minioadmin` | ETL |
+| `HR_INSIGHTS_MINIO_SECURE` | `false` | ETL |
+| `HR_INSIGHTS_MINIO_BUCKET` | `hr-insights` | ETL |
+| `HR_INSIGHTS_RAW_DATA_DIR` | `data/raw` | ETL |
+| `HR_INSIGHTS_MANIFESTS_DIR` | `logs/manifests` | ETL |
+| `HR_INSIGHTS_ETL_BATCH_SIZE` | `1000` | ETL (bronze load) |
+| `HR_INSIGHTS_ETL_DEFAULT_YEAR` | `0` (use current) | ETL (gold when year not set) |
+| `HR_INSIGHTS_ETL_DEFAULT_MONTH` | `0` (use current) | ETL (gold when month not set) |
+| `API_HOST` | `0.0.0.0` | API |
+| `API_PORT` | `5173` | API |
+| `API_DEBUG` | `false` | API |
+| `API_ENV_NAME` | `development` | API |
+| `API_RELOAD` | `true` | API |
 
-Change `secret_key` and user credentials in production.
+All of the above can be set in a `.env` file in the project root. Database/JWT: `echo`, `secret_key`, `algorithm`, `access_token_expire_minutes` via pydantic-settings in `src.app.database`.
 
 ## Analytics SQL
 

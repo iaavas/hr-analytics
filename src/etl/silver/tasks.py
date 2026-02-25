@@ -45,9 +45,15 @@ class TransformEmployeeSilver(luigi.Task):
         clean_df = clean_employee(df)
 
         with SilverLoader() as loader:
-            loader.load_organizations(clean_df)
-            loader.load_departments(clean_df)
-            count = loader.load_employee_data(clean_df)
+            try:
+                loader.load_organizations(clean_df)
+                loader.load_departments(clean_df)
+                count = loader.load_employee_data(clean_df)
+                loader.commit()
+            except Exception as e:
+                loader.rollback()
+                logger.error("Silver employee load failed: %s", e, exc_info=True)
+                raise
 
         os.makedirs("logs/markers", exist_ok=True)
 
@@ -82,7 +88,13 @@ class TransformTimesheetSilver(luigi.Task):
         clean_df = clean_timesheet(df)
 
         with SilverLoader() as loader:
-            count = loader.load_timesheet_data(clean_df)
+            try:
+                count = loader.load_timesheet_data(clean_df)
+                loader.commit()
+            except Exception as e:
+                loader.rollback()
+                logger.error("Silver timesheet load failed: %s", e, exc_info=True)
+                raise
 
         os.makedirs("logs/markers", exist_ok=True)
 

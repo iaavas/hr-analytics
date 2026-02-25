@@ -1,10 +1,12 @@
 import logging
 import os
+from datetime import date
 
 import luigi
 
 from src.etl.gold.loader import run_gold_etl
 from src.etl.silver.tasks import LoadAllSilver
+from src.app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +14,8 @@ logger = logging.getLogger(__name__)
 class TransformGoldLayer(luigi.Task):
     year = luigi.IntParameter(default=0)
     month = luigi.IntParameter(default=0)
-    all_months = luigi.BoolParameter(default=False, description="Process full history across all months")
+    all_months = luigi.BoolParameter(
+        default=False, description="Process full history across all months")
 
     def requires(self):
         return LoadAllSilver()
@@ -24,16 +27,13 @@ class TransformGoldLayer(luigi.Task):
         year = self.year
         month = self.month
 
-        # If explicitly asked for historical processing, ignore year/month hints
         if self.all_months:
             run_gold_etl(all_months=True)
         else:
             if year == 0 or month == 0:
-                from datetime import date
-
                 today = date.today()
-                year = year or today.year
-                month = month or today.month
+                year = settings.etl_default_year or today.year
+                month = settings.etl_default_month or today.month
 
             run_gold_etl(year=year, month=month)
 
@@ -52,7 +52,8 @@ class TransformGoldLayer(luigi.Task):
 class LoadAllGold(luigi.Task):
     year = luigi.IntParameter(default=0)
     month = luigi.IntParameter(default=0)
-    all_months = luigi.BoolParameter(default=False, description="Process full history across all months")
+    all_months = luigi.BoolParameter(
+        default=False, description="Process full history across all months")
 
     def requires(self):
         return TransformGoldLayer(year=self.year, month=self.month, all_months=self.all_months)

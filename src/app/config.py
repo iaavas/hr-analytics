@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     raw_data_dir: str = "data/raw"
     manifests_dir: str = "logs/manifests"
 
+    etl_batch_size: int = 1000
+    etl_default_year: int = 0
+    etl_default_month: int = 0
+
     class Config:
         env_file = ".env"
         env_prefix = "HR_INSIGHTS_"

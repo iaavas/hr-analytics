@@ -42,12 +42,13 @@ class LoadSingleFileBronze(luigi.Task):
                          na_values=["[NULL]", "NULL", ""])
 
         with BronzeLoader() as loader:
+            batch_size = settings.etl_batch_size
             if self.entity == "employee":
                 count = loader.load_employee_data(
-                    df, source_file=self.filename)
+                    df, source_file=self.filename, batch_size=batch_size)
             elif self.entity == "timesheet":
                 count = loader.load_timesheet_data(
-                    df, source_file=self.filename)
+                    df, source_file=self.filename, batch_size=batch_size)
             else:
                 raise ValueError(f"Unknown entity type: {self.entity}")
 

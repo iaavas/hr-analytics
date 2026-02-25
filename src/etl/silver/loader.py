@@ -48,8 +48,6 @@ class SilverLoader:
         ]
 
         self.db.bulk_save_objects(records)
-        self.db.commit()
-
         return len(records)
 
     def load_departments(self, df: pd.DataFrame):
@@ -69,8 +67,6 @@ class SilverLoader:
         ]
 
         self.db.bulk_save_objects(records)
-        self.db.commit()
-
         return len(records)
 
     def load_employee_data(self, df: pd.DataFrame):
@@ -96,13 +92,10 @@ class SilverLoader:
             )
 
         self.db.bulk_save_objects(records)
-        self.db.commit()
-
         return len(records)
 
     def load_timesheet_data(self, df: pd.DataFrame):
         self.db.query(TimesheetSilver).delete()
-        self.db.commit()
 
         valid_employee_ids = {
             row[0]
@@ -151,8 +144,13 @@ class SilverLoader:
                 )
             )
         self.db.bulk_save_objects(records)
-        self.db.commit()
         return len(records)
+
+    def commit(self):
+        self.db.commit()
+
+    def rollback(self):
+        self.db.rollback()
 
     def close(self):
         if self._owner:
