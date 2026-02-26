@@ -1,15 +1,18 @@
-import luigi
-import pandas as pd
+import hashlib
 import logging
 import os
 
+import luigi
+import pandas as pd
+
+from src.app.config import settings
 from src.etl.bronze.extract import (
-    ExtractFromMinIO,
-    ExtractFromLocal,
+    DiscoverLocalFiles,
     DiscoverMinIOFiles,
+    ExtractFromLocal,
+    ExtractFromMinIO,
 )
 from src.etl.bronze.loader import BronzeLoader
-from src.app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -20,14 +23,14 @@ ENTITY_MAP = {
 
 
 class LoadSingleFileBronze(luigi.Task):
-    """Load one CSV into the correct bronze table based on entity type."""
     entity = luigi.Parameter()
     filename = luigi.Parameter()
     source = luigi.Parameter(default="minio")
+    prefix = luigi.Parameter(default="")
 
     def requires(self):
         if self.source == "minio":
-            return ExtractFromMinIO(filename=self.filename)
+            return ExtractFromMinIO(filename=self.filename, prefix=self.prefix)
         return ExtractFromLocal(filename=self.filename)
 
     def output(self):
@@ -59,33 +62,34 @@ class LoadSingleFileBronze(luigi.Task):
             f.write(f"loaded {count} records from {self.filename}")
 
 
+def _manifest_hash(manifest_path: str) -> str:
+    with open(manifest_path) as f:
+        lines = sorted(line.strip() for line in f if line.strip())
+    return hashlib.sha256(",".join(lines).encode()).hexdigest()[:12]
+
+
 class LoadAllBronze(luigi.Task):
-    """
-    Entry point — discovers all CSVs and loads them all into bronze.
-    Handles any number of employee_* and timesheet_* files automatically.
-    Safe to rerun — skips files that already have .done markers.
-    """
     source = luigi.Parameter(default="minio")
     prefix = luigi.Parameter(default="")
 
     def requires(self):
         if self.source == "minio":
             return DiscoverMinIOFiles(prefix=self.prefix)
-        return []
+        return DiscoverLocalFiles()
 
     def output(self):
-        return luigi.LocalTarget("logs/markers/bronze_all.done")
+        manifest_path = self.input().path
+        h = _manifest_hash(manifest_path)
+        return luigi.LocalTarget(
+            f"logs/markers/bronze_all_{self.source}_{h}.done"
+        )
 
     def _get_filenames(self):
-        if self.source == "minio":
-            with self.input().open("r") as f:
-                return [
-                    os.path.basename(line.strip())
-                    for line in f if line.strip()
-                ]
-        else:
-            raw_dir = settings.raw_data_dir
-            return [f for f in os.listdir(raw_dir) if f.endswith(".csv")]
+        with self.input().open("r") as f:
+            return [
+                os.path.basename(line.strip())
+                for line in f if line.strip()
+            ]
 
     def run(self):
         filenames = self._get_filenames()
@@ -98,8 +102,8 @@ class LoadAllBronze(luigi.Task):
 
         for filename in filenames:
             entity = None
-            for prefix, ent in ENTITY_MAP.items():
-                if filename.lower().startswith(prefix):
+            for name_prefix, ent in ENTITY_MAP.items():
+                if filename.lower().startswith(name_prefix):
                     entity = ent
                     break
 
@@ -109,6 +113,7 @@ class LoadAllBronze(luigi.Task):
                         entity=entity,
                         filename=filename,
                         source=self.source,
+                        prefix=self.prefix,
                     )
                 )
                 logger.info(f"Queuing: {filename} → bronze.{entity}")

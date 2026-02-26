@@ -43,7 +43,7 @@ HR Insights is an ETL pipelin for Employee and Timehseet data. It ingests raw em
    python -m src.etl.run --module src.etl.gold.tasks LoadAllGold --local-scheduler --all-months True
    ```
 
-   This uses the ETL entry script for consistent logging. Without it: `python -m luigi --module src.etl.gold.tasks LoadAllGold --local-scheduler --all-months True`
+   For local CSVs (in `data/raw`): add `--source local`. The pipeline is rerun-safe: new or changed files trigger reprocessing.
 
 4. **Start the API**
 

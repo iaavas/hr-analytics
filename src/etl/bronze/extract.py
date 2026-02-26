@@ -1,9 +1,12 @@
-import luigi
+import hashlib
+import logging
 import os
 import shutil
-import logging
-from src.etl.extract_minio import MinIOExtractor
+
+import luigi
+
 from src.app.config import settings
+from src.etl.extract_minio import MinIOExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +37,9 @@ class ExtractFileFromMinIO(luigi.Task):
 class DiscoverMinIOFiles(luigi.Task):
     prefix = luigi.Parameter(default="")
 
+    def complete(self):
+        return False
+
     def output(self):
         safe_prefix = self.prefix.replace("/", "_") or "root"
         return luigi.LocalTarget(
@@ -49,7 +55,7 @@ class DiscoverMinIOFiles(luigi.Task):
             bucket_name=settings.minio_bucket,
         )
         objects = extractor.list_objects(prefix=self.prefix)
-        csv_files = [o for o in objects if o.endswith(".csv")]
+        csv_files = sorted(o for o in objects if o.endswith(".csv"))
 
         os.makedirs(settings.manifests_dir, exist_ok=True)
         with self.output().open("w") as f:
@@ -58,6 +64,24 @@ class DiscoverMinIOFiles(luigi.Task):
 
         logger.info(
             f"Discovered {len(csv_files)} CSV files under prefix '{self.prefix}'")
+
+
+class DiscoverLocalFiles(luigi.Task):
+    def output(self):
+        os.makedirs(settings.raw_data_dir, exist_ok=True)
+        names = sorted(f for f in os.listdir(settings.raw_data_dir) if f.endswith(".csv"))
+        h = hashlib.sha256(",".join(names).encode()).hexdigest()[:12]
+        return luigi.LocalTarget(
+            os.path.join(settings.manifests_dir, f"local_{h}.txt")
+        )
+
+    def run(self):
+        names = sorted(f for f in os.listdir(settings.raw_data_dir) if f.endswith(".csv"))
+        os.makedirs(settings.manifests_dir, exist_ok=True)
+        with self.output().open("w") as f:
+            for name in names:
+                f.write(name + "\n")
+        logger.info(f"Discovered {len(names)} local CSV files")
 
 
 class ExtractFromMinIO(luigi.Task):

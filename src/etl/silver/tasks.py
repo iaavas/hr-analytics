@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 
@@ -6,12 +7,15 @@ import pandas as pd
 from sqlalchemy import text
 
 from src.app.database import engine
-from src.etl.bronze.tasks import LoadAllBronze
 from src.etl.quality.tasks import ValidateBronze
 from src.etl.silver.loader import SilverLoader
 from src.etl.silver.transform import clean_employee, clean_timesheet
 
 logger = logging.getLogger(__name__)
+
+
+def _path_hash(path: str) -> str:
+    return hashlib.sha256(path.encode()).hexdigest()[:12]
 
 
 class TransformEmployeeSilver(luigi.Task):
@@ -26,7 +30,8 @@ class TransformEmployeeSilver(luigi.Task):
         )
 
     def output(self):
-        return luigi.LocalTarget("logs/markers/silver_employee.done")
+        h = _path_hash(self.input().path)
+        return luigi.LocalTarget(f"logs/markers/silver_employee_{h}.done")
 
     def run(self):
 
@@ -77,7 +82,8 @@ class TransformTimesheetSilver(luigi.Task):
         )
 
     def output(self):
-        return luigi.LocalTarget("logs/markers/silver_timesheet.done")
+        h = _path_hash(self.input().path)
+        return luigi.LocalTarget(f"logs/markers/silver_timesheet_{h}.done")
 
     def run(self):
 
@@ -119,7 +125,8 @@ class LoadAllSilver(luigi.Task):
         )
 
     def output(self):
-        return luigi.LocalTarget("logs/markers/silver_all.done")
+        h = _path_hash(self.input().path)
+        return luigi.LocalTarget(f"logs/markers/silver_all_{h}.done")
 
     def run(self):
 
