@@ -7,6 +7,7 @@ from sqlalchemy import text
 
 from src.app.database import engine
 from src.etl.bronze.tasks import LoadAllBronze
+from src.etl.quality.tasks import ValidateBronze
 from src.etl.silver.loader import SilverLoader
 from src.etl.silver.transform import clean_employee, clean_timesheet
 
@@ -19,7 +20,7 @@ class TransformEmployeeSilver(luigi.Task):
     prefix = luigi.Parameter(default="")
 
     def requires(self):
-        return LoadAllBronze(
+        return ValidateBronze(
             source=self.source,
             prefix=self.prefix,
         )
@@ -52,7 +53,8 @@ class TransformEmployeeSilver(luigi.Task):
                 loader.commit()
             except Exception as e:
                 loader.rollback()
-                logger.error("Silver employee load failed: %s", e, exc_info=True)
+                logger.error("Silver employee load failed: %s",
+                             e, exc_info=True)
                 raise
 
         os.makedirs("logs/markers", exist_ok=True)
@@ -93,7 +95,8 @@ class TransformTimesheetSilver(luigi.Task):
                 loader.commit()
             except Exception as e:
                 loader.rollback()
-                logger.error("Silver timesheet load failed: %s", e, exc_info=True)
+                logger.error("Silver timesheet load failed: %s",
+                             e, exc_info=True)
                 raise
 
         os.makedirs("logs/markers", exist_ok=True)

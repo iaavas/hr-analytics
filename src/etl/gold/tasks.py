@@ -18,7 +18,8 @@ class TransformGoldLayer(luigi.Task):
         default=False, description="Process full history across all months")
 
     def requires(self):
-        return LoadAllSilver()
+        from src.etl.quality.tasks import ValidateSilver
+        return ValidateSilver()
 
     def output(self):
         return luigi.LocalTarget(f"logs/markers/gold_{self.year}_{self.month}.done")
