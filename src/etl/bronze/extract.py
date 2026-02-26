@@ -54,34 +54,58 @@ class DiscoverMinIOFiles(luigi.Task):
             secure=settings.minio_secure,
             bucket_name=settings.minio_bucket,
         )
-        objects = extractor.list_objects(prefix=self.prefix)
-        csv_files = sorted(o for o in objects if o.endswith(".csv"))
+        objects = [
+            (name, etag)
+            for name, etag in extractor.list_objects_with_etag(prefix=self.prefix)
+            if name.endswith(".csv")
+        ]
+        objects.sort(key=lambda x: x[0])
 
         os.makedirs(settings.manifests_dir, exist_ok=True)
         with self.output().open("w") as f:
-            for name in csv_files:
-                f.write(name + "\n")
+            for name, etag in objects:
+                f.write(f"{name}\t{etag}\n")
 
         logger.info(
-            f"Discovered {len(csv_files)} CSV files under prefix '{self.prefix}'")
+            f"Discovered {len(objects)} CSV files under prefix '{self.prefix}'")
+
+
+def _file_content_hash(path: str) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()[:16]
 
 
 class DiscoverLocalFiles(luigi.Task):
     def output(self):
         os.makedirs(settings.raw_data_dir, exist_ok=True)
-        names = sorted(f for f in os.listdir(settings.raw_data_dir) if f.endswith(".csv"))
-        h = hashlib.sha256(",".join(names).encode()).hexdigest()[:12]
+        entries = []
+        for f in sorted(os.listdir(settings.raw_data_dir)):
+            if not f.endswith(".csv"):
+                continue
+            path = os.path.join(settings.raw_data_dir, f)
+            if os.path.isfile(path):
+                entries.append(f"{f}\t{_file_content_hash(path)}")
+        content = "\n".join(entries)
+        h = hashlib.sha256(content.encode()).hexdigest()[:12]
         return luigi.LocalTarget(
             os.path.join(settings.manifests_dir, f"local_{h}.txt")
         )
 
     def run(self):
-        names = sorted(f for f in os.listdir(settings.raw_data_dir) if f.endswith(".csv"))
         os.makedirs(settings.manifests_dir, exist_ok=True)
-        with self.output().open("w") as f:
-            for name in names:
-                f.write(name + "\n")
-        logger.info(f"Discovered {len(names)} local CSV files")
+        entries = []
+        for f in sorted(os.listdir(settings.raw_data_dir)):
+            if not f.endswith(".csv"):
+                continue
+            path = os.path.join(settings.raw_data_dir, f)
+            if os.path.isfile(path):
+                entries.append(f"{f}\t{_file_content_hash(path)}")
+        with self.output().open("w") as out:
+            out.write("\n".join(entries) + "\n")
+        logger.info(f"Discovered {len(entries)} local CSV files")
 
 
 class ExtractFromMinIO(luigi.Task):

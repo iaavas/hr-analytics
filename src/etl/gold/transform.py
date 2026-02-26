@@ -16,8 +16,23 @@ ROLLING_WINDOW_WEEKS = 4
 
 def get_employees_from_db(db: Session) -> pd.DataFrame:
     employees = db.query(Employee).all()
+    as_of = date.today()
+    for emp in employees:
+        if emp.hire_date and emp.hire_date > as_of:
+            as_of = emp.hire_date
+        if emp.term_date and emp.term_date > as_of:
+            as_of = emp.term_date
+
     data = []
     for emp in employees:
+        end_date = emp.term_date if emp.term_date else as_of
+        tenure_days = (
+            (end_date - emp.hire_date).days
+            if emp.hire_date else None
+        )
+        is_early_attrition = (
+            bool(emp.term_date and emp.hire_date and tenure_days is not None and tenure_days <= 90)
+        )
         data.append(
             {
                 "client_employee_id": emp.client_employee_id,
@@ -35,18 +50,8 @@ def get_employees_from_db(db: Session) -> pd.DataFrame:
                 "scheduled_weekly_hour": emp.scheduled_weekly_hour,
                 "is_active": emp.is_active,
                 "is_per_diem": emp.is_per_diem,
-                "tenure_days": (
-                    ((emp.term_date or date.today()) - emp.hire_date).days
-                    if emp.hire_date else None
-                ),
-                "is_early_attrition": (
-                    not emp.is_active
-                    and emp.term_date
-                    and emp.hire_date
-                    and (emp.term_date - emp.hire_date).days <= 90
-                )
-                if emp.is_active is not None
-                else None,
+                "tenure_days": tenure_days,
+                "is_early_attrition": is_early_attrition,
             }
         )
     return pd.DataFrame(data)
@@ -138,14 +143,14 @@ def calculate_headcount_trend(
     month: int,
 ) -> dict:
     ref_date = date(year, month, 1)
+    month_end = (ref_date + pd.offsets.MonthEnd(0)).date()
 
     month_employees = employees[
         (employees["hire_date"].notna())
+        & (employees["hire_date"] <= month_end)
         & ((employees["term_date"].isna()) | (employees["term_date"] >= ref_date))
     ]
     active_count = len(month_employees)
-
-    month_end = (ref_date + pd.offsets.MonthEnd(0)).date()
     new_hires = len(
         employees[
             (employees["hire_date"].notna())
@@ -201,6 +206,7 @@ def calculate_department_metrics(
 
         active_emp = dept_employees[
             (dept_employees["hire_date"].notna())
+            & (dept_employees["hire_date"] <= month_end)
             & ((dept_employees["term_date"].isna()) | (dept_employees["term_date"] >= ref_date))
         ]
         active_headcount = len(active_emp)

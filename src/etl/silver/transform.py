@@ -70,7 +70,14 @@ def clean_employee(df: pd.DataFrame) -> pd.DataFrame:
     df["is_per_diem"] = df.get("is_per_deim").apply(_bool_from_string)
     df["active_status_bool"] = df.get("active_status").apply(_bool_from_string)
 
-    today = date.today()
+    date_cols_used = [c for c in ("hire_date", "recent_hire_date", "job_start_date", "term_date") if c in df.columns]
+    as_of = date.today()
+    if date_cols_used:
+        max_per_col = df[date_cols_used].max()
+        valid = max_per_col.dropna()
+        if len(valid) > 0:
+            latest = valid.max()
+            as_of = latest.date() if hasattr(latest, "date") else latest
 
     def _hire_start(row):
         for col in ("hire_date", "recent_hire_date", "job_start_date"):
@@ -83,7 +90,7 @@ def clean_employee(df: pd.DataFrame) -> pd.DataFrame:
         if start is None:
             return None
 
-        end = row["term_date"] if pd.notna(row["term_date"]) else today
+        end = row["term_date"] if pd.notna(row["term_date"]) else as_of
         return (end - start).days
 
     df["tenure_days"] = df.apply(_tenure_days, axis=1)

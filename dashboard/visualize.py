@@ -42,9 +42,8 @@ def load_headcount(engine) -> pd.DataFrame:
     if df.empty:
         return df
     df["date"] = [_first_of_month(y, m) for y, m in zip(df.year, df.month)]
-    df["turnover_rate"] = (
-        df["terminations"] / df["active_headcount"].replace(0, pd.NA) * 100
-    ).round(2)
+    rate = df["terminations"] / df["active_headcount"].replace(0, pd.NA) * 100
+    df["turnover_rate"] = pd.to_numeric(rate, errors="coerce").round(2)
     return df
 
 
@@ -215,10 +214,11 @@ def workforce_dashboard(
                 early_attrition_count=("early_attrition_count", "sum"),
             )
         )
-        agg["turnover_rate"] = (
+        rate_series = (
             agg["terminations"] /
             agg["active_headcount"].replace(0, pd.NA) * 100
-        ).round(2)
+        )
+        agg["turnover_rate"] = pd.to_numeric(rate_series, errors="coerce").round(2)
         agg["early_attrition_rate"] = (
             agg["early_attrition_count"] /
             agg["new_hires"].replace(0, pd.NA) * 100
@@ -238,10 +238,11 @@ def workforce_dashboard(
             term = tmp.groupby([group_col, "period"], as_index=False)[
                 "terminations"].sum()
             agg = agg.merge(term, on=[group_col, "period"], how="left")
-            agg["turnover_rate"] = (
+            rate_series = (
                 agg["terminations"] /
                 agg["active_headcount"].replace(0, pd.NA) * 100
-            ).round(2)
+            )
+            agg["turnover_rate"] = pd.to_numeric(rate_series, errors="coerce").round(2)
         elif has_turnover and "turnover_rate" in tmp:
             rate = tmp.groupby([group_col, "period"], as_index=False)[
                 "turnover_rate"].mean()

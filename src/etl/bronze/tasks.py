@@ -4,8 +4,10 @@ import os
 
 import luigi
 import pandas as pd
+from sqlalchemy import text
 
 from src.app.config import settings
+from src.app.database import engine
 from src.etl.bronze.extract import (
     DiscoverLocalFiles,
     DiscoverMinIOFiles,
@@ -63,9 +65,18 @@ class LoadSingleFileBronze(luigi.Task):
 
 
 def _manifest_hash(manifest_path: str) -> str:
+    with open(manifest_path, "rb") as f:
+        return hashlib.sha256(f.read()).hexdigest()[:12]
+
+
+def _manifest_filenames(manifest_path: str):
     with open(manifest_path) as f:
-        lines = sorted(line.strip() for line in f if line.strip())
-    return hashlib.sha256(",".join(lines).encode()).hexdigest()[:12]
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            name = line.split("\t")[0].strip()
+            yield os.path.basename(name)
 
 
 class LoadAllBronze(luigi.Task):
@@ -85,13 +96,10 @@ class LoadAllBronze(luigi.Task):
         )
 
     def _get_filenames(self):
-        with self.input().open("r") as f:
-            return [
-                os.path.basename(line.strip())
-                for line in f if line.strip()
-            ]
+        return list(_manifest_filenames(self.input().path))
 
     def run(self):
+
         filenames = self._get_filenames()
 
         if not filenames:

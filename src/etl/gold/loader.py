@@ -19,13 +19,30 @@ from src.db.models.gold import (
 from datetime import date
 from typing import Any, Optional
 
+import math
+
 import numpy as np
 import pandas as pd
 from sqlalchemy.orm import Session
 
 
+def _is_nullish(val: Any) -> bool:
+    """True if value is None, NaN, or pd.NA (unsuitable for DB)."""
+    if val is None:
+        return True
+    if isinstance(val, (np.floating, float)) and math.isnan(val):
+        return True
+    if pd.isna(val):
+        return True
+    return False
+
+
 def _to_native(val: Any) -> Any:
-    """Convert numpy scalars to native Python types for DB/JSON compatibility."""
+    """Convert numpy scalars to native Python types for DB/JSON compatibility.
+    Converts NaN/NA to None so PostgreSQL accepts nullable columns.
+    """
+    if _is_nullish(val):
+        return None
     if isinstance(val, (np.floating, np.integer)):
         return val.item()
     return val
@@ -126,14 +143,21 @@ def load_employee_monthly_snapshots(db: Session, employees: pd.DataFrame, year: 
             pd.isna(emp.get("term_date")) or emp.get("term_date") >= ref_date
         )
 
+        raw_dept_id = emp.get("department_id")
+        department_id = None if _is_nullish(raw_dept_id) else str(raw_dept_id)
+
+        hire = emp.get("hire_date")
+        term = emp.get("term_date")
         snapshot = EmployeeMonthlySnapshot(
-            client_employee_id=emp["client_employee_id"],
+            client_employee_id=str(emp["client_employee_id"]),
             year=year,
             month=month,
             is_active=is_active,
-            hire_date=emp.get("hire_date"),
-            term_date=emp.get("term_date"),
-            department_id=emp.get("department_id"),
+            hire_date=hire if not _is_nullish(hire) else None,
+            term_date=term if not _is_nullish(term) else None,
+            department_id=department_id,
+            department_name=None if _is_nullish(emp.get("department_name")) else str(emp.get("department_name")),
+            job_title=None if _is_nullish(emp.get("job_title")) else str(emp.get("job_title")),
             tenure_days=_to_native(emp.get("tenure_days")),
         )
         db.add(snapshot)
@@ -218,6 +242,7 @@ def load_organization_metrics(
     active_employees = len(
         employees[
             (employees["hire_date"].notna())
+            & (employees["hire_date"] <= month_end)
             & ((employees["term_date"].isna()) | (employees["term_date"] >= ref_date))
         ]
     )
@@ -228,6 +253,7 @@ def load_organization_metrics(
 
     active_emp = employees[
         (employees["hire_date"].notna())
+        & (employees["hire_date"] <= month_end)
         & ((employees["term_date"].isna()) | (employees["term_date"] >= ref_date))
     ]
     avg_tenure = (

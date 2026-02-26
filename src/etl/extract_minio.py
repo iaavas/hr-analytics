@@ -1,7 +1,7 @@
 import os
 import io
 import logging
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from datetime import datetime
 
 import pandas as pd
@@ -69,13 +69,16 @@ class MinIOExtractor:
         return uploaded
 
     def list_objects(self, prefix: str = "") -> List[str]:
+        return [name for name, _ in self.list_objects_with_etag(prefix)]
+
+    def list_objects_with_etag(self, prefix: str = "") -> List[Tuple[str, str]]:
         try:
             objects = self.client.list_objects(
                 self.bucket_name,
                 prefix=prefix,
                 recursive=True,
             )
-            return [obj.object_name for obj in objects]
+            return [(obj.object_name, getattr(obj, "etag", "") or "") for obj in objects]
         except S3Error as e:
             logger.error(f"Error listing objects: {e}")
             raise
