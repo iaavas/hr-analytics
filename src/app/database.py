@@ -1,9 +1,8 @@
-"""Database engine, session factory, and init. Uses bronze/silver/gold schemas. DATABASE_URL and JWT settings via BaseSettings."""
+"""Database engine, session factory, and init. DATABASE_URL and JWT settings from .env / environment."""
 
+from pydantic_settings import BaseSettings
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
-from pydantic_settings import BaseSettings
-import os
 
 
 class DatabaseSettings(BaseSettings):
@@ -14,12 +13,14 @@ class DatabaseSettings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
 
+    class Config:
+        env_file = ".env"
+        extra = "ignore"
+
 
 db_settings = DatabaseSettings()
 
-database_url = os.environ.get("DATABASE_URL", db_settings.database_url)
-
-engine = create_engine(database_url, echo=db_settings.echo)
+engine = create_engine(db_settings.database_url, echo=db_settings.echo)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
