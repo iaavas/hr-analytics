@@ -33,7 +33,6 @@ def validate_bronze() -> List[CheckResult]:
             )
         )
 
-        # Employee: duplicate client_employee_id (informational; silver dedupes)
         row = _run(
             conn,
             """
@@ -48,8 +47,24 @@ def validate_bronze() -> List[CheckResult]:
         results.append(
             CheckResult(
                 "bronze_employee_unique_client_id",
-                True,
-                f"{dup_emp} duplicate client_employee_id (silver keeps last)",
+                dup_emp == 0,
+                f"{dup_emp} duplicate client_employee_id (must be unique)",
+            )
+        )
+
+        row = _run(
+            conn,
+            """
+            SELECT COUNT(*) FROM timesheet_raw
+            WHERE hours_worked IS NOT NULL AND (hours_worked < 0 OR hours_worked > 24)
+            """,
+        ).fetchone()
+        bad_hours = row[0] if row else 0
+        results.append(
+            CheckResult(
+                "bronze_timesheet_hours_range",
+                bad_hours == 0,
+                f"{bad_hours} rows with hours_worked outside 0–24",
             )
         )
 
@@ -109,6 +124,24 @@ def validate_silver() -> List[CheckResult]:
             conn,
             """
             SELECT COUNT(*) FROM (
+                SELECT client_employee_id FROM silver.employee
+                GROUP BY client_employee_id HAVING COUNT(*) > 1
+            ) x
+            """,
+        ).fetchone()
+        dup_emp = row[0] if row else 0
+        results.append(
+            CheckResult(
+                "silver_employee_unique_client_id",
+                dup_emp == 0,
+                f"{dup_emp} duplicate client_employee_id in silver.employee",
+            )
+        )
+
+        row = _run(
+            conn,
+            """
+            SELECT COUNT(*) FROM (
                 SELECT client_employee_id, punch_in_datetime, punch_out_datetime
                 FROM silver.timesheet
                 GROUP BY client_employee_id, punch_in_datetime, punch_out_datetime
@@ -135,6 +168,56 @@ def validate_silver() -> List[CheckResult]:
                 "silver_timesheet_employee_fk",
                 orphan == 0,
                 f"{orphan} timesheet rows reference missing employee",
+            )
+        )
+
+        # Timesheet: worked_minutes in 0–1440 (minutes per day)
+        row = _run(
+            conn,
+            """
+            SELECT COUNT(*) FROM silver.timesheet
+            WHERE worked_minutes IS NOT NULL AND (worked_minutes < 0 OR worked_minutes > 1440)
+            """,
+        ).fetchone()
+        bad_mins = row[0] if row else 0
+        results.append(
+            CheckResult(
+                "silver_timesheet_worked_minutes_range",
+                bad_mins == 0,
+                f"{bad_mins} rows with worked_minutes outside 0–1440",
+            )
+        )
+
+        # Timesheet: hours_worked in 0–24
+        row = _run(
+            conn,
+            """
+            SELECT COUNT(*) FROM silver.timesheet
+            WHERE hours_worked IS NOT NULL AND (hours_worked < 0 OR hours_worked > 24)
+            """,
+        ).fetchone()
+        bad_hrs = row[0] if row else 0
+        results.append(
+            CheckResult(
+                "silver_timesheet_hours_worked_range",
+                bad_hrs == 0,
+                f"{bad_hrs} rows with hours_worked outside 0–24",
+            )
+        )
+
+        row = _run(
+            conn,
+            """
+            SELECT COUNT(*) FROM silver.timesheet
+            WHERE work_date IS NOT NULL AND (work_date < '1990-01-01' OR work_date > (CURRENT_DATE + INTERVAL '1 year')::date)
+            """,
+        ).fetchone()
+        bad_dates = row[0] if row else 0
+        results.append(
+            CheckResult(
+                "silver_timesheet_work_date_range",
+                bad_dates == 0,
+                f"{bad_dates} rows with work_date outside 1990–(today+1yr)",
             )
         )
 

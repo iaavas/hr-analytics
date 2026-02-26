@@ -41,9 +41,19 @@ HR Insights is an ETL pipelin for Employee and Timehseet data. It ingests raw em
 
 3. **Run the ETL pipeline** (to populate silver and gold data)
 
+   ETL only (gold layer):
+
    ```bash
    python -m src.etl.run --module src.etl.gold.tasks LoadAllGold --local-scheduler --all-months True
    ```
+
+   Full pipeline with **QC report and dashboard HTML** (recommended):
+
+   ```bash
+   python -m src.etl.run --module src.etl.quality.tasks RunDashboards --local-scheduler --all-months True
+   ```
+
+   This runs gold load, writes a QC report to `logs/reports/`, and generates `workforce_trend.html`, `work_hours_overtime.html`, and `attendance_discipline.html` in the project root.
 
    For local CSVs (in `data/raw`): add `--source local`. The pipeline is rerun-safe: new or changed files trigger reprocessing.
 

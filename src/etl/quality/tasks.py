@@ -1,6 +1,9 @@
 import hashlib
 import logging
 import os
+import subprocess
+import sys
+from pathlib import Path
 
 import luigi
 
@@ -33,7 +36,8 @@ class ValidateBronze(luigi.Task):
     def run(self):
         results = validate_bronze()
         for r in results:
-            logger.info("[%s] %s: %s", "PASS" if r.passed else "FAIL", r.name, r.detail)
+            logger.info("[%s] %s: %s",
+                        "PASS" if r.passed else "FAIL", r.name, r.detail)
         if not _all_passed(results):
             raise ValueError("Bronze validation failed")
         os.makedirs("logs/markers", exist_ok=True)
@@ -56,7 +60,8 @@ class ValidateSilver(luigi.Task):
     def run(self):
         results = validate_silver()
         for r in results:
-            logger.info("[%s] %s: %s", "PASS" if r.passed else "FAIL", r.name, r.detail)
+            logger.info("[%s] %s: %s",
+                        "PASS" if r.passed else "FAIL", r.name, r.detail)
         if not _all_passed(results):
             raise ValueError("Silver validation failed")
         os.makedirs("logs/markers", exist_ok=True)
@@ -91,3 +96,41 @@ class RunQCReport(luigi.Task):
         os.makedirs("logs/markers", exist_ok=True)
         with self.output().open("w") as f:
             f.write(path)
+
+
+class RunDashboards(luigi.Task):
+    year = luigi.IntParameter(default=0)
+    month = luigi.IntParameter(default=0)
+    all_months = luigi.BoolParameter(default=False)
+    source = luigi.Parameter(default="minio")
+    prefix = luigi.Parameter(default="")
+
+    def requires(self):
+        return RunQCReport(
+            year=self.year,
+            month=self.month,
+            all_months=self.all_months,
+            source=self.source,
+            prefix=self.prefix,
+        )
+
+    def output(self):
+        h = _path_hash(self.input().path)
+        return luigi.LocalTarget(f"logs/markers/dashboards_{h}.done")
+
+    def run(self):
+        project_root = Path(__file__).resolve().parent.parent.parent
+        script = project_root / "dashboard" / "visualize.py"
+        if not script.exists():
+            raise FileNotFoundError(f"Dashboard script not found: {script}")
+        subprocess.run(
+            [sys.executable, str(script)],
+            cwd=str(project_root),
+            env=os.environ.copy(),
+            check=True,
+        )
+        os.makedirs("logs/markers", exist_ok=True)
+        with self.output().open("w") as f:
+            f.write("done")
+        logger.info(
+            "Dashboards written to project root (workforce_trend.html, work_hours_overtime.html, attendance_discipline.html)")
