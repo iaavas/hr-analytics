@@ -20,8 +20,10 @@ HR Insights is an ETL pipelin for Employee and Timehseet data. It ingests raw em
    From the project root:
 
    ```bash
-   pip install -r requirements.txt
+   pip install -e .
    ```
+
+   Or with uv: `uv sync`
 
 2. **Configure database**
 
