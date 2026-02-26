@@ -78,15 +78,28 @@ class SilverLoader:
                 EmployeeSilver(
                     client_employee_id=str(r.client_employee_id),
                     first_name=r.first_name,
+                    middle_name=_scalar_or_none(getattr(r, "middle_name", None)),
                     last_name=r.last_name,
-                    organization_id=r.organization_id,
-                    department_id=r.department_id,
+                    preferred_name=_scalar_or_none(getattr(r, "preferred_name", None)),
+                    job_code=_scalar_or_none(getattr(r, "job_code", None)),
+                    job_title=_scalar_or_none(getattr(r, "job_title", None)),
+                    organization_id=_scalar_or_none(getattr(r, "organization_id", None)),
+                    department_id=_scalar_or_none(getattr(r, "department_id", None)),
                     manager_employee_id=_scalar_or_none(
                         getattr(r, "manager_employee_id", None)
                     ),
                     hire_date=_scalar_or_none(getattr(r, "hire_date", None)),
                     term_date=_scalar_or_none(getattr(r, "term_date", None)),
-                    is_active=r.is_active,
+                    dob=_scalar_or_none(getattr(r, "dob", None)),
+                    years_of_experience=_scalar_or_none(
+                        getattr(r, "years_of_experience", None)
+                    ),
+                    scheduled_weekly_hour=_scalar_or_none(
+                        getattr(r, "scheduled_weekly_hour", None)
+                    ),
+                    is_active=_scalar_or_none(getattr(r, "is_active", None)),
+                    is_per_diem=_scalar_or_none(getattr(r, "is_per_diem", None)),
+                    source_file=_scalar_or_none(getattr(r, "source_file", None)),
                     created_at=datetime.utcnow(),
                 )
             )

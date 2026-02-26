@@ -25,10 +25,16 @@ def get_employees_from_db(db: Session) -> pd.DataFrame:
                 "last_name": emp.last_name,
                 "department_id": emp.department_id,
                 "department_name": emp.department.department_name if emp.department else None,
+                "job_code": emp.job_code,
                 "job_title": emp.job_title,
+                "preferred_name": emp.preferred_name,
                 "hire_date": emp.hire_date,
                 "term_date": emp.term_date,
+                "dob": emp.dob,
+                "years_of_experience": emp.years_of_experience,
+                "scheduled_weekly_hour": emp.scheduled_weekly_hour,
                 "is_active": emp.is_active,
+                "is_per_diem": emp.is_per_diem,
                 "tenure_days": (
                     ((emp.term_date or date.today()) - emp.hire_date).days
                     if emp.hire_date else None
