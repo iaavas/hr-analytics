@@ -218,7 +218,8 @@ def workforce_dashboard(
             agg["terminations"] /
             agg["active_headcount"].replace(0, pd.NA) * 100
         )
-        agg["turnover_rate"] = pd.to_numeric(rate_series, errors="coerce").round(2)
+        agg["turnover_rate"] = pd.to_numeric(
+            rate_series, errors="coerce").round(2)
         agg["early_attrition_rate"] = (
             agg["early_attrition_count"] /
             agg["new_hires"].replace(0, pd.NA) * 100
@@ -242,7 +243,8 @@ def workforce_dashboard(
                 agg["terminations"] /
                 agg["active_headcount"].replace(0, pd.NA) * 100
             )
-            agg["turnover_rate"] = pd.to_numeric(rate_series, errors="coerce").round(2)
+            agg["turnover_rate"] = pd.to_numeric(
+                rate_series, errors="coerce").round(2)
         elif has_turnover and "turnover_rate" in tmp:
             rate = tmp.groupby([group_col, "period"], as_index=False)[
                 "turnover_rate"].mean()

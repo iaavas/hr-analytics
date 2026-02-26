@@ -22,7 +22,7 @@ def validate_bronze() -> List[CheckResult]:
     with engine.connect() as conn:
         row = _run(
             conn,
-            "SELECT COUNT(*) AS c FROM employee_raw WHERE client_employee_id IS NULL OR TRIM(COALESCE(client_employee_id, '')) = ''",
+            "SELECT COUNT(*) AS c FROM bronze.employee_raw WHERE client_employee_id IS NULL OR TRIM(COALESCE(client_employee_id, '')) = ''",
         ).fetchone()
         null_emp = row[0] if row else 0
         results.append(
@@ -37,7 +37,7 @@ def validate_bronze() -> List[CheckResult]:
             conn,
             """
             SELECT COUNT(*) FROM (
-                SELECT client_employee_id FROM employee_raw
+                SELECT client_employee_id FROM bronze.employee_raw
                 WHERE client_employee_id IS NOT NULL AND TRIM(client_employee_id) != ''
                 GROUP BY client_employee_id HAVING COUNT(*) > 1
             ) x
@@ -55,7 +55,7 @@ def validate_bronze() -> List[CheckResult]:
         row = _run(
             conn,
             """
-            SELECT COUNT(*) FROM timesheet_raw
+            SELECT COUNT(*) FROM bronze.timesheet_raw
             WHERE hours_worked IS NOT NULL AND (hours_worked < 0 OR hours_worked > 24)
             """,
         ).fetchone()
@@ -73,7 +73,7 @@ def validate_bronze() -> List[CheckResult]:
             """
             SELECT COUNT(*) FROM (
                 SELECT client_employee_id, punch_in_datetime, punch_out_datetime
-                FROM timesheet_raw
+                FROM bronze.timesheet_raw
                 GROUP BY client_employee_id, punch_in_datetime, punch_out_datetime
                 HAVING COUNT(*) > 1
             ) x
@@ -90,7 +90,7 @@ def validate_bronze() -> List[CheckResult]:
 
         row = _run(
             conn,
-            "SELECT COUNT(*) FROM timesheet_raw WHERE client_employee_id IS NULL OR TRIM(COALESCE(client_employee_id, '')) = ''",
+            "SELECT COUNT(*) FROM bronze.timesheet_raw WHERE client_employee_id IS NULL OR TRIM(COALESCE(client_employee_id, '')) = ''",
         ).fetchone()
         null_ts_emp = row[0] if row else 0
         results.append(

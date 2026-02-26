@@ -14,8 +14,8 @@ def _run(conn, sql: str, params=None) -> Any:
 def collect_qc_stats() -> Dict[str, Any]:
     stats = {}
     with engine.connect() as conn:
-        stats["employee_raw"] = _run(conn, "SELECT COUNT(*) FROM employee_raw")
-        stats["timesheet_raw"] = _run(conn, "SELECT COUNT(*) FROM timesheet_raw")
+        stats["employee_raw"] = _run(conn, "SELECT COUNT(*) FROM bronze.employee_raw")
+        stats["timesheet_raw"] = _run(conn, "SELECT COUNT(*) FROM bronze.timesheet_raw")
         stats["silver_employee"] = _run(conn, "SELECT COUNT(*) FROM silver.employee")
         stats["silver_timesheet"] = _run(conn, "SELECT COUNT(*) FROM silver.timesheet")
         stats["gold_headcount_trend"] = _run(

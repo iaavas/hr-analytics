@@ -44,7 +44,7 @@ class TransformEmployeeSilver(luigi.Task):
 
         with engine.begin() as conn:
             df = pd.read_sql(
-                text("SELECT * FROM employee_raw"),
+                text("SELECT * FROM bronze.employee_raw"),
                 conn,
             )
 
@@ -89,7 +89,7 @@ class TransformTimesheetSilver(luigi.Task):
 
         with engine.begin() as conn:
             df = pd.read_sql(
-                text("SELECT * FROM timesheet_raw"),
+                text("SELECT * FROM bronze.timesheet_raw"),
                 conn,
             )
 

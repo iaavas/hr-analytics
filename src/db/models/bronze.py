@@ -5,6 +5,7 @@ from src.app.database import Base
 
 class EmployeeBronze(Base):
     __tablename__ = "employee_raw"
+    __table_args__ = {"schema": "bronze"}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     client_employee_id = Column(String(50))
@@ -47,6 +48,7 @@ class EmployeeBronze(Base):
 
 class TimesheetBronze(Base):
     __tablename__ = "timesheet_raw"
+    __table_args__ = {"schema": "bronze"}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     client_employee_id = Column(String(255))
