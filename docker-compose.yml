@@ -1,3 +1,27 @@
+x-app-base: &app-base
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: hr-insights:latest
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    DATABASE_URL: postgresql://hr_insights:hr_insights@postgres:5432/hr_insights
+    HR_INSIGHTS_MINIO_ENDPOINT: minio:9000
+    HR_INSIGHTS_MINIO_ACCESS_KEY: minioadmin
+    HR_INSIGHTS_MINIO_SECRET_KEY: minioadmin
+    HR_INSIGHTS_MINIO_SECURE: "false"
+    HR_INSIGHTS_MINIO_BUCKET: hr-insights
+    HR_INSIGHTS_RAW_DATA_DIR: data/raw
+    HR_INSIGHTS_MANIFESTS_DIR: logs/manifests
+    API_HOST: 0.0.0.0
+    API_PORT: 5173
+  volumes:
+    - logs_data:/app/logs
+    - dashboard_output:/app/dashboard/output
+    - ./data/raw:/app/data/raw:ro
+
 services:
   postgres:
     image: postgres:15
@@ -11,10 +35,10 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hr_insights"]
+      test: ["CMD-SHELL", "pg_isready -U hr_insights -d hr_insights"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 20
 
   minio:
     image: minio/minio:latest
@@ -30,9 +54,32 @@ services:
       - minio_data:/data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
+      interval: 10s
+      timeout: 5s
+      retries: 20 
+
+  api:
+    <<: *app-base
+    container_name: hr_insights_api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    command:
+      - /bin/sh
+      - -c
+      - >
+        alembic upgrade head &&
+        python src/etl/upload_to_minio.py data/raw &&
+        python -m luigi --module src.etl.gold.tasks LoadAllGold --local-scheduler --all-months && python dashboard/visualize.py &&
+        uvicorn src.app.main:app --host 0.0.0.0 --port 5173
+    ports:
+      - "5173:5173"
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   minio_data:
+  logs_data:
+  dashboard_output:

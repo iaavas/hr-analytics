@@ -65,7 +65,7 @@ class LoadAllGold(luigi.Task):
     year = luigi.IntParameter(default=0)
     month = luigi.IntParameter(default=0)
     all_months = luigi.BoolParameter(
-        default=False, description="Process full history across all months")
+        default=True, description="Process full history across all months")
     source = luigi.Parameter(default="minio")
     prefix = luigi.Parameter(default="")
 

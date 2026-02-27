@@ -1,0 +1,15 @@
+.git
+.gitignore
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.ruff_cache
+logs
+dashboard/output
+notebooks
+hr_insights.egg-info
+*.DS_Store

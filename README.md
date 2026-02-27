@@ -71,6 +71,51 @@ HR Insights is an ETL pipelin for Employee and Timehseet data. It ingests raw em
 
    The API listens on the host/port defined in `API_HOST` and `API_PORT` (defaults: `0.0.0.0`, `5173`).
 
+## Docker deployment (full pipeline)
+
+This project includes a full Dockerized pipeline:
+- `postgres`: application database
+- `minio`: object storage for raw CSV ingestion
+- `api`: FastAPI service that runs startup pipeline in order on every container start:
+  - `alembic upgrade head`
+  - `python src/etl/upload_to_minio.py data/raw`
+  - `python -m src.etl.run --module src.etl.quality.tasks RunDashboards --local-scheduler --all-months True`
+  - start `uvicorn`
+
+### Quick start
+
+1. Create env file:
+
+```bash
+cp .env.example .env
+```
+
+2. Build and run:
+
+```bash
+docker compose up --build
+```
+
+3. Access services:
+- API docs: `http://localhost:5173/docs`
+- MinIO console: `http://localhost:9001`
+
+Pipeline outputs are persisted in Docker volumes:
+- logs and markers: `/app/logs`
+- dashboard HTML: `/app/dashboard/output`
+
+Stop everything:
+
+```bash
+docker compose down
+```
+
+Reset database/object storage/etl outputs:
+
+```bash
+docker compose down -v
+```
+
 ## API Documentation
 
 Interactive OpenAPI docs are available at `/docs` (Swagger UI) and `/redoc` (ReDoc). The OpenAPI JSON is at `/openapi.json`.
