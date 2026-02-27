@@ -61,7 +61,7 @@ def clean_employee(df: pd.DataFrame) -> pd.DataFrame:
 
     for col in date_cols:
         if col in df.columns:
-            df[col] = pd.to_datetime(df[col], errors="coerce").dt.date
+            df[col] = pd.to_datetime(df[col], errors="coerce")
 
     df["years_of_experience"] = df["years_of_experience"].apply(_safe_float)
     df["scheduled_weekly_hour"] = df["scheduled_weekly_hour"].apply(
@@ -70,7 +70,8 @@ def clean_employee(df: pd.DataFrame) -> pd.DataFrame:
     df["is_per_diem"] = df.get("is_per_deim").apply(_bool_from_string)
     df["active_status_bool"] = df.get("active_status").apply(_bool_from_string)
 
-    date_cols_used = [c for c in ("hire_date", "recent_hire_date", "job_start_date", "term_date") if c in df.columns]
+    date_cols_used = [c for c in (
+        "hire_date", "recent_hire_date", "job_start_date", "term_date") if c in df.columns]
     as_of = date.today()
     if date_cols_used:
         max_per_col = df[date_cols_used].max()
@@ -90,7 +91,8 @@ def clean_employee(df: pd.DataFrame) -> pd.DataFrame:
         if start is None:
             return None
 
-        end = row["term_date"] if pd.notna(row["term_date"]) else as_of
+        end = row["term_date"] if pd.notna(
+            row["term_date"]) else pd.Timestamp(as_of)
         return (end - start).days
 
     df["tenure_days"] = df.apply(_tenure_days, axis=1)
@@ -98,12 +100,11 @@ def clean_employee(df: pd.DataFrame) -> pd.DataFrame:
         lambda x: round(x / 30, 2) if x else None
     )
 
-    # Normalize manager IDs to string, keeping missing as None
     df["manager_employee_id"] = df["manager_employee_id"].apply(
-        lambda m: str(m).strip() if pd.notna(m) and str(m).strip() != "" else None
+        lambda m: str(m).strip() if pd.notna(
+            m) and str(m).strip() != "" else None
     )
 
-    # Drop manager references that don't exist in the current dataset to avoid FK failures
     emp_ids = set(df["client_employee_id"].astype(str))
     df["manager_employee_id"] = df["manager_employee_id"].apply(
         lambda m: m if m in emp_ids else None
@@ -160,6 +161,19 @@ def clean_timesheet(df: pd.DataFrame) -> pd.DataFrame:
         df["punch_apply_date"],
         errors="coerce",
     ).dt.date
+
+    df = df.drop_duplicates(
+        subset=["client_employee_id",
+                "punch_in_datetime", "punch_out_datetime"],
+        keep="first",
+    )
+
+    if "hours_worked" in df.columns:
+        df["hours_worked"] = pd.to_numeric(df["hours_worked"], errors="coerce")
+        bad_hours = (df["hours_worked"].notna()) & (
+            (df["hours_worked"] < 0) | (df["hours_worked"] > 24)
+        )
+        df.loc[bad_hours, "hours_worked"] = np.nan
 
     df["worked_minutes"] = (
         (df["punch_out_datetime"] - df["punch_in_datetime"])

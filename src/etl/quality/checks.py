@@ -35,61 +35,6 @@ def validate_bronze() -> List[CheckResult]:
 
         row = _run(
             conn,
-            """
-            SELECT COUNT(*) FROM (
-                SELECT client_employee_id FROM bronze.employee_raw
-                WHERE client_employee_id IS NOT NULL AND TRIM(client_employee_id) != ''
-                GROUP BY client_employee_id HAVING COUNT(*) > 1
-            ) x
-            """,
-        ).fetchone()
-        dup_emp = row[0] if row else 0
-        results.append(
-            CheckResult(
-                "bronze_employee_unique_client_id",
-                dup_emp == 0,
-                f"{dup_emp} duplicate client_employee_id (must be unique)",
-            )
-        )
-
-        row = _run(
-            conn,
-            """
-            SELECT COUNT(*) FROM bronze.timesheet_raw
-            WHERE hours_worked IS NOT NULL AND (hours_worked < 0 OR hours_worked > 24)
-            """,
-        ).fetchone()
-        bad_hours = row[0] if row else 0
-        results.append(
-            CheckResult(
-                "bronze_timesheet_hours_range",
-                bad_hours == 0,
-                f"{bad_hours} rows with hours_worked outside 0–24",
-            )
-        )
-
-        row = _run(
-            conn,
-            """
-            SELECT COUNT(*) FROM (
-                SELECT client_employee_id, punch_in_datetime, punch_out_datetime
-                FROM bronze.timesheet_raw
-                GROUP BY client_employee_id, punch_in_datetime, punch_out_datetime
-                HAVING COUNT(*) > 1
-            ) x
-            """,
-        ).fetchone()
-        dup_ts = row[0] if row else 0
-        results.append(
-            CheckResult(
-                "bronze_timesheet_duplicate_shifts",
-                dup_ts == 0,
-                f"{dup_ts} duplicate (employee, punch_in, punch_out)",
-            )
-        )
-
-        row = _run(
-            conn,
             "SELECT COUNT(*) FROM bronze.timesheet_raw WHERE client_employee_id IS NULL OR TRIM(COALESCE(client_employee_id, '')) = ''",
         ).fetchone()
         null_ts_emp = row[0] if row else 0

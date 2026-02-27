@@ -1,9 +1,14 @@
 import argparse
 import os
 import sys
+from pathlib import Path
 
-from src.etl.extract_minio import MinIOExtractor
+if __package__ is None or __package__ == "":
+    project_root = Path(__file__).resolve().parents[2]
+    sys.path.insert(0, str(project_root))
+
 from src.app.config import settings
+from src.etl.extract_minio import MinIOExtractor
 
 
 def upload_path(path: str, prefix: str = "", object_name: str | None = None) -> list[str]:

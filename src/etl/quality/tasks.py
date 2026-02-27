@@ -35,11 +35,14 @@ class ValidateBronze(luigi.Task):
 
     def run(self):
         results = validate_bronze()
+        failed = [r for r in results if not r.passed]
         for r in results:
-            logger.info("[%s] %s: %s",
-                        "PASS" if r.passed else "FAIL", r.name, r.detail)
-        if not _all_passed(results):
-            raise ValueError("Bronze validation failed")
+            level = logging.WARNING if not r.passed else logging.INFO
+            logger.log(level, "[%s] %s: %s",
+                      "PASS" if r.passed else "FAIL", r.name, r.detail)
+        if failed:
+            details = "; ".join(f"{r.name}: {r.detail}" for r in failed)
+            raise ValueError(f"Bronze validation failed: {details}")
         os.makedirs("logs/markers", exist_ok=True)
         with self.output().open("w") as f:
             f.write("ok")
@@ -59,11 +62,14 @@ class ValidateSilver(luigi.Task):
 
     def run(self):
         results = validate_silver()
+        failed = [r for r in results if not r.passed]
         for r in results:
-            logger.info("[%s] %s: %s",
-                        "PASS" if r.passed else "FAIL", r.name, r.detail)
-        if not _all_passed(results):
-            raise ValueError("Silver validation failed")
+            level = logging.WARNING if not r.passed else logging.INFO
+            logger.log(level, "[%s] %s: %s",
+                      "PASS" if r.passed else "FAIL", r.name, r.detail)
+        if failed:
+            details = "; ".join(f"{r.name}: {r.detail}" for r in failed)
+            raise ValueError(f"Silver validation failed: {details}")
         os.makedirs("logs/markers", exist_ok=True)
         with self.output().open("w") as f:
             f.write("ok")

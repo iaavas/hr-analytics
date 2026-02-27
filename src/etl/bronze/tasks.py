@@ -69,6 +69,12 @@ def _manifest_hash(manifest_path: str) -> str:
         return hashlib.sha256(f.read()).hexdigest()[:12]
 
 
+def _manifest_marker_key(manifest_path: str) -> str:
+    if os.path.exists(manifest_path):
+        return _manifest_hash(manifest_path)
+    return hashlib.sha256(manifest_path.encode()).hexdigest()[:12]
+
+
 def _manifest_filenames(manifest_path: str):
     with open(manifest_path) as f:
         for line in f:
@@ -90,7 +96,7 @@ class LoadAllBronze(luigi.Task):
 
     def output(self):
         manifest_path = self.input().path
-        h = _manifest_hash(manifest_path)
+        h = _manifest_marker_key(manifest_path)
         return luigi.LocalTarget(
             f"logs/markers/bronze_all_{self.source}_{h}.done"
         )

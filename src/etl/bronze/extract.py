@@ -37,9 +37,6 @@ class ExtractFileFromMinIO(luigi.Task):
 class DiscoverMinIOFiles(luigi.Task):
     prefix = luigi.Parameter(default="")
 
-    def complete(self):
-        return False
-
     def output(self):
         safe_prefix = self.prefix.replace("/", "_") or "root"
         return luigi.LocalTarget(
