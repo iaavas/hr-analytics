@@ -2,6 +2,8 @@
 
 HR Insights is an ETL pipelin for Employee and Timehseet data. It ingests raw employee and timesheet data into bronze/silver layers, builds gold-layer analytics, and exposes a JSON API over the silver and gold models.
 
+Detailed implementation, setup, ETL usage, and schema documentation is available in [PROJECT_DOCUMENTATION.md](PROJECT_DOCUMENTATION.md).
+
 ## Overview
 
 - **ETL**: Luigi-based pipeline that loads source data into bronze and silver schemas and computes gold-layer KPIs (headcount, turnover, attendance, organization metrics).
