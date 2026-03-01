@@ -139,4 +139,6 @@ class RunDashboards(luigi.Task):
         with self.output().open("w") as f:
             f.write("done")
         logger.info(
-            "Dashboards written to project root (workforce_trend.html, work_hours_overtime.html, attendance_discipline.html)")
+            "Dashboards written under dashboard/output, including workforce, executive, "
+            "department, attendance, and work-hours views."
+        )

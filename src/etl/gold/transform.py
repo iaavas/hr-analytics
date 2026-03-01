@@ -31,7 +31,8 @@ def get_employees_from_db(db: Session) -> pd.DataFrame:
             if emp.hire_date else None
         )
         is_early_attrition = (
-            bool(emp.term_date and emp.hire_date and tenure_days is not None and tenure_days <= 90)
+            bool(
+                emp.term_date and emp.hire_date and tenure_days is not None and tenure_days <= 90)
         )
         data.append(
             {
@@ -144,34 +145,64 @@ def calculate_headcount_trend(
 ) -> dict:
     ref_date = date(year, month, 1)
     month_end = (ref_date + pd.offsets.MonthEnd(0)).date()
+    ref_ts = pd.Timestamp(ref_date)
+    month_end_ts = pd.Timestamp(month_end)
 
-    month_employees = employees[
-        (employees["hire_date"].notna())
-        & (employees["hire_date"] <= month_end)
-        & ((employees["term_date"].isna()) | (employees["term_date"] >= ref_date))
+    emp = employees.copy()
+    emp["hire_date"] = pd.to_datetime(emp["hire_date"])
+    emp["term_date"] = pd.to_datetime(emp["term_date"])
+
+    month_employees = emp[
+        (emp["hire_date"].notna())
+        & (emp["hire_date"] <= month_end_ts)
+        & ((emp["term_date"].isna()) | (emp["term_date"] >= ref_ts))
     ]
     active_count = len(month_employees)
+
+    end_of_month_headcount = len(
+        emp[
+            (emp["hire_date"].notna())
+            & (emp["hire_date"] <= month_end_ts)
+            & ((emp["term_date"].isna()) | (emp["term_date"] > month_end_ts))
+        ]
+    )
+
     new_hires = len(
-        employees[
-            (employees["hire_date"].notna())
-            & (employees["hire_date"] >= ref_date)
-            & (employees["hire_date"] <= month_end)
+        emp[
+            (emp["hire_date"].notna())
+            & (emp["hire_date"] >= ref_ts)
+            & (emp["hire_date"] <= month_end_ts)
         ]
     )
     terminations = len(
-        employees[
-            (employees["term_date"].notna())
-            & (employees["term_date"] >= ref_date)
-            & (employees["term_date"] <= month_end)
+        emp[
+            (emp["term_date"].notna())
+            & (emp["term_date"] >= ref_ts)
+            & (emp["term_date"] <= month_end_ts)
         ]
     )
+
+    # Fallback: derive terminations from headcount delta when term_date is not populated
+    if terminations == 0 and new_hires >= 0:
+        # last day of previous month
+        prev_month_end = ref_date - timedelta(days=1)
+        prev_month_end_ts = pd.Timestamp(prev_month_end)
+        prev_end_of_month = emp[
+            (emp["hire_date"].notna())
+            & (emp["hire_date"] <= prev_month_end_ts)
+            & ((emp["term_date"].isna()) | (emp["term_date"] > prev_month_end_ts))
+        ]
+        prev_headcount = len(prev_end_of_month)
+        derived = prev_headcount + new_hires - end_of_month_headcount
+        if derived > 0:
+            terminations = derived
     early_attrition_count = len(
-        employees[
-            (employees["is_early_attrition"] == True)
+        emp[
+            (emp["is_early_attrition"] == True)
             & (
-                employees["term_date"].notna()
-                & (employees["term_date"] >= ref_date)
-                & (employees["term_date"] <= month_end)
+                emp["term_date"].notna()
+                & (emp["term_date"] >= ref_ts)
+                & (emp["term_date"] <= month_end_ts)
             )
         ]
     )
