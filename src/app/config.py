@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     minio_secret_key: str = "minioadmin"
     minio_secure: bool = False
     minio_bucket: str = "hr-insights"
+    database_url: str = "postgresql://hr_insights:hr_insights@localhost:5432/hr_insights"
 
     raw_data_dir: str = "data/raw"
     manifests_dir: str = "logs/manifests"
@@ -19,6 +20,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         env_prefix = "HR_INSIGHTS_"
+        extra = "ignore"
 
 
 settings = Settings()

@@ -39,7 +39,7 @@ class ValidateBronze(luigi.Task):
         for r in results:
             level = logging.WARNING if not r.passed else logging.INFO
             logger.log(level, "[%s] %s: %s",
-                      "PASS" if r.passed else "FAIL", r.name, r.detail)
+                       "PASS" if r.passed else "FAIL", r.name, r.detail)
         if failed:
             details = "; ".join(f"{r.name}: {r.detail}" for r in failed)
             raise ValueError(f"Bronze validation failed: {details}")
@@ -66,7 +66,7 @@ class ValidateSilver(luigi.Task):
         for r in results:
             level = logging.WARNING if not r.passed else logging.INFO
             logger.log(level, "[%s] %s: %s",
-                      "PASS" if r.passed else "FAIL", r.name, r.detail)
+                       "PASS" if r.passed else "FAIL", r.name, r.detail)
         if failed:
             details = "; ".join(f"{r.name}: {r.detail}" for r in failed)
             raise ValueError(f"Silver validation failed: {details}")
@@ -125,7 +125,7 @@ class RunDashboards(luigi.Task):
         return luigi.LocalTarget(f"logs/markers/dashboards_{h}.done")
 
     def run(self):
-        project_root = Path(__file__).resolve().parent.parent.parent
+        project_root = Path(__file__).resolve().parent.parent.parent.parent
         script = project_root / "dashboard" / "visualize.py"
         if not script.exists():
             raise FileNotFoundError(f"Dashboard script not found: {script}")

@@ -1,6 +1,6 @@
 # HR Insights
 
-HR Insights is a Python-based HR analytics platform built around a medallion-style ETL pipeline. It ingests raw employee and timesheet files, loads them through bronze and silver data layers, computes gold-layer KPIs, generates HTML dashboards, and exposes curated data through a FastAPI application.
+HR Insights is a Python-based HR analytics platform built around a medallion-style ETL pipeline. It ingests raw employee and timesheet files, loads them through bronze and silver data layers, computes gold-layer KPIs, **generates interactive visualizations** that tell a data story, and exposes curated data through a FastAPI application.
 
 ## Table of Contents
 
@@ -8,43 +8,45 @@ HR Insights is a Python-based HR analytics platform built around a medallion-sty
 2. [Engineering Decisions](#engineering-decisions)
 3. [Setup Instructions](#setup-instructions)
 4. [Usage Guide](#usage-guide)
-5. [Schema Documentation](#schema-documentation)
-6. [API Documentation](#api-documentation)
-7. [Project Structure](#project-structure)
-8. [Environment Variables](#environment-variables)
-9. [Analytics SQL](#analytics-sql)
-10. [Dashboard Outputs](#dashboard-outputs)
+5. [Visualizations](#visualizations)
+6. [Schema Documentation](#schema-documentation)
+7. [API Documentation](#api-documentation)
+8. [Project Structure](#project-structure)
+9. [Environment Variables](#environment-variables)
+10. [Analytics SQL](#analytics-sql)
 
 ## Overview
 
 - `ETL`: Luigi-based tasks discover files from local storage or MinIO, load bronze raw tables, normalize silver entities, validate quality, and compute gold metrics.
 - `API`: FastAPI provides CRUD access for employees and read-oriented endpoints for timesheets and analytics.
 - `Storage`: PostgreSQL stores the bronze, silver, and gold schemas. MinIO is supported as an object-storage source for raw CSV ingestion.
-- `Reporting`: Plotly generates static HTML dashboards from gold metrics.
+- **Visualizations**: Plotly generates interactive HTML dashboards from gold analytics—clear, actionable insights that tell a data story, with filters, drill-downs, and time ranges.
 
 ### Architecture
 
-![System Architecture](images/System%20Architecture.png)
+System Architecture
 
 ## Engineering Decisions
 
 ### Technology Choices
 
-| Area | Choice | Why it was chosen | Trade-off |
-| --- | --- | --- | --- |
-| Language | Python 3.10+ | One stack covers ETL, API development, scripting, and reporting through pandas, SQLAlchemy, Luigi, FastAPI, and Plotly. | Runtime performance is lower than compiled alternatives, but iteration speed is better for this workload. |
-| Orchestration | Luigi | The pipeline is dependency-driven and fits Luigi tasks well. Luigi also provides simple local scheduling and filesystem-based completion markers. | It is lighter-weight than Airflow or Prefect and has less built-in observability. |
-| Database | PostgreSQL | The project needs relational integrity for employees, departments, organizations, and timesheets, plus support for multiple schemas. | More normalization work is required before data is analytics-ready. |
-| Raw storage | MinIO | Docker deployments need an S3-compatible source for raw files without introducing external cloud dependencies. | It adds a service compared with a local-files-only workflow. |
-| ORM / migrations | SQLAlchemy 2.x + Alembic | The same stack is reused by both the API and ETL, and Alembic handles schema evolution cleanly. | Models and migrations must be kept aligned manually. |
-| API | FastAPI | Typed request/response schemas and automatic OpenAPI docs fit the service layer well. | It introduces a second runtime surface area beyond the ETL pipeline. |
-| Reporting | Plotly HTML dashboards | Reports need to be easy to generate and share without a separate BI tool. | Static HTML is not a multi-user analytics platform. |
+
+| Area             | Choice                   | Why it was chosen                                                                                                                                 | Trade-off                                                                                                 |
+| ---------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Language         | Python 3.10+             | One stack covers ETL, API development, scripting, and reporting through pandas, SQLAlchemy, Luigi, FastAPI, and Plotly.                           | Runtime performance is lower than compiled alternatives, but iteration speed is better for this workload. |
+| Orchestration    | Luigi                    | The pipeline is dependency-driven and fits Luigi tasks well. Luigi also provides simple local scheduling and filesystem-based completion markers. | It is lighter-weight than Airflow or Prefect and has less built-in observability.                         |
+| Database         | PostgreSQL               | The project needs relational integrity for employees, departments, organizations, and timesheets, plus support for multiple schemas.              | More normalization work is required before data is analytics-ready.                                       |
+| Raw storage      | MinIO                    | Docker deployments need an S3-compatible source for raw files without introducing external cloud dependencies.                                    | It adds a service compared with a local-files-only workflow.                                              |
+| ORM / migrations | SQLAlchemy 2.x + Alembic | The same stack is reused by both the API and ETL, and Alembic handles schema evolution cleanly.                                                   | Models and migrations must be kept aligned manually.                                                      |
+| API              | FastAPI                  | Typed request/response schemas and automatic OpenAPI docs fit the service layer well.                                                             | It introduces a second runtime surface area beyond the ETL pipeline.                                      |
+| Reporting        | Plotly HTML dashboards   | Reports need to be easy to generate and share without a separate BI tool.                                                                         | Static HTML is not a multi-user analytics platform.                                                       |
+
 
 ### Architecture Decisions
 
 #### Medallion architecture
 
-![Medallion Architecture](images/Medallion%20Architecture.png)
+Medallion Architecture
 
 The project separates data into three schemas:
 
@@ -68,7 +70,7 @@ The trade-off is that bronze is a staging zone rather than an immediately query-
 
 #### Luigi markers and manifest hashing control reruns
 
-![ETL Flow](images/ETL.png)
+ETL Flow
 
 The ETL uses Luigi `LocalTarget` outputs under `logs/markers/` and discovery manifests under `logs/manifests/`.
 
@@ -95,14 +97,66 @@ Gold tables such as `headcount_trend`, `employee_attendance_metrics`, and `depar
 
 ### Prerequisites
 
-- Python 3.10 or newer
-- PostgreSQL 15 or newer
-- `pip` or `uv`
-- Optional: Docker with Compose support
+- Docker with Compose support (recommended)
+- Or: Python 3.10+, PostgreSQL 15+, `pip` or `uv` for local setup
+
+---
+
+### Docker setup (recommended)
+
+The fastest way to run the full stack—ETL, database, MinIO, API, and visualizations—is via Docker:
+
+```bash
+docker compose up --build
+```
+
+This starts:
+
+- `postgres`
+- `minio`
+- `api`
+
+At container startup, the `api` service automatically:
+
+1. Runs `alembic upgrade head` to initialize schemas
+2. Uploads raw files from `data/raw/` to MinIO
+3. Runs the full ETL pipeline (bronze → silver → gold)
+4. Generates interactive dashboards via `dashboard/visualize.py`
+5. Starts the API server
+
+**Service URLs:**
+
+| Service      | URL                          |
+| ------------ | ---------------------------- |
+| API docs     | http://localhost:5173/docs   |
+| MinIO console| http://localhost:9001        |
+
+**Shutdown:**
+
+```bash
+docker compose down
+```
+
+To remove volumes as well:
+
+```bash
+docker compose down -v
+```
+
+---
 
 ### Local setup
 
-#### 1. Install dependencies
+For development or when Docker is not available:
+
+#### 1. Create and activate a virtual environment
+
+```bash
+python -m venv .venv
+source .venv/bin/activate   # On Windows: .venv\Scripts\activate
+```
+
+#### 2. Install dependencies
 
 ```bash
 uv sync
@@ -114,7 +168,7 @@ or
 pip install -e .
 ```
 
-#### 2. Create the environment file
+#### 3. Create the environment file
 
 ```bash
 cp .env.example .env
@@ -139,7 +193,7 @@ HR_INSIGHTS_MANIFESTS_DIR=logs/manifests
 HR_INSIGHTS_ETL_BATCH_SIZE=1000
 ```
 
-#### 3. Start PostgreSQL
+#### 4. Start PostgreSQL
 
 If you want to use Docker for just the database:
 
@@ -147,7 +201,7 @@ If you want to use Docker for just the database:
 docker compose up -d postgres
 ```
 
-#### 4. Initialize schemas and tables
+#### 5. Initialize schemas and tables
 
 Either run migrations:
 
@@ -163,7 +217,7 @@ python -m src.app.database
 
 Both approaches create the `bronze`, `silver`, and `gold` schemas plus the mapped tables.
 
-#### 5. Add raw input files
+#### 6. Add raw input files
 
 Place raw CSV files in `data/raw/`.
 
@@ -175,7 +229,7 @@ Current ETL behavior expects:
 
 Files that do not match the expected prefixes are skipped by the bronze load task.
 
-#### 6. Optional: start MinIO and upload source files
+#### 7. Optional: start MinIO and upload source files
 
 If you want MinIO-backed ingestion:
 
@@ -187,43 +241,6 @@ Then upload local files into the configured bucket:
 
 ```bash
 python src/etl/upload_to_minio.py data/raw
-```
-
-### Full Docker setup
-
-To run the entire stack:
-
-```bash
-docker compose up --build
-```
-
-This starts:
-
-- `postgres`
-- `minio`
-- `api`
-
-At container startup, the `api` service runs:
-
-1. `alembic upgrade head`
-2. `python src/etl/upload_to_minio.py data/raw`
-3. `python -m luigi --module src.etl.gold.tasks LoadAllGold --local-scheduler --all-months`
-4. `python dashboard/visualize.py`
-5. `uvicorn src.app.main:app --host 0.0.0.0 --port 5173`
-
-Service URLs:
-
-- API docs: `http://localhost:5173/docs`
-- MinIO console: `http://localhost:9001`
-
-Shutdown commands:
-
-```bash
-docker compose down
-```
-
-```bash
-docker compose down -v
 ```
 
 ## Usage Guide
@@ -242,57 +259,38 @@ The full pipeline runs in this order:
 8. write a QC report,
 9. generate dashboard HTML files.
 
-### Recommended commands
+### ETL commands
 
-#### Run the full ETL, QC report, and dashboards from local files
-
-```bash
-python -m src.etl.run --module src.etl.quality.tasks RunDashboards --local-scheduler --source local --all-months True
-```
 
 #### Run the full ETL, QC report, and dashboards from MinIO
 
 ```bash
-python -m src.etl.run --module src.etl.quality.tasks RunDashboards --local-scheduler --all-months True
+python -m src.etl.run --module src.etl.quality.tasks RunDashboards --local-scheduler --all-months
 ```
-
-`source` defaults to `minio`, so this expects files to already exist in the configured bucket.
 
 #### Run only through the gold layer
 
 ```bash
-python -m src.etl.run --module src.etl.gold.tasks LoadAllGold --local-scheduler --all-months True
+python -m src.etl.run --module src.etl.gold.tasks LoadAllGold --local-scheduler --all-months
 ```
 
 #### Run the QC report without dashboard generation
 
 ```bash
-python -m src.etl.run --module src.etl.quality.tasks RunQCReport --local-scheduler --all-months True
+python -m src.etl.run --module src.etl.quality.tasks RunQCReport --local-scheduler --all-months 
 ```
 
 ### Outputs
 
 After the pipeline runs, check:
 
-| Output | Location | Notes |
-| --- | --- | --- |
-| Luigi manifests | `logs/manifests/` | discovered input files and hashes/etags |
-| Luigi markers | `logs/markers/` | completion markers for bronze, silver, gold, QC, and dashboards |
-| QC reports | `logs/reports/` | text reports such as `qc_report_YYYYMMDD_HHMMSS.txt` |
-| Dashboards | `dashboard/output/` | Plotly HTML dashboards |
 
-Dashboard files currently generated by `dashboard/visualize.py`:
-
-- `dashboard/output/workforce_trend.html`
-- `dashboard/output/executive_story.html`
-- `dashboard/output/department_story.html`
-- `dashboard/output/attendance_drilldown.html`
-- `dashboard/output/tenure_by_department.html`
-- `dashboard/output/attendance_rates.html`
-- `dashboard/output/rolling_hours_4w.html`
-- `dashboard/output/work_hours_overtime.html`
-- `dashboard/output/attendance_discipline.html`
-- `dashboard/output/attendance_heatmap.html`
+| Output          | Location            | Notes                                                           |
+| --------------- | ------------------- | --------------------------------------------------------------- |
+| Luigi manifests | `logs/manifests/`   | discovered input files and hashes/etags                         |
+| Luigi markers   | `logs/markers/`     | completion markers for bronze, silver, gold, QC, and dashboards |
+| QC reports      | `logs/reports/`     | text reports such as `qc_report_YYYYMMDD_HHMMSS.txt`            |
+| Dashboards      | `dashboard/output/` | Interactive Plotly HTML dashboards—see [Visualizations](#visualizations) |
 
 ### Generate dashboards directly
 
@@ -316,19 +314,58 @@ Available docs:
 - ReDoc: `http://localhost:5173/redoc`
 - OpenAPI JSON: `http://localhost:5173/openapi.json`
 
+---
+
+## Visualizations
+
+The project produces **interactive Plotly HTML dashboards** that turn gold-layer analytics into clear, actionable insights. Each visualization tells a data story with proper labeling, legends, and formatting—and includes interactive elements such as filters, drill-downs, and time ranges where appropriate.
+
+These dashboards surface the core assignment KPIs: active headcount over time, turnover trends, average tenure by department, working hours and overtime, late arrivals, early departures, rolling average hours, and early attrition—all derived from the gold-layer SQL analytics.
+
+### Generated dashboards
+
+| Dashboard | Purpose |
+| --------- | ------- |
+| `workforce_trend.html` | Active headcount over time, hiring and attrition trends |
+| `executive_story.html` | High-level KPIs and organization-wide metrics |
+| `department_story.html` | Department-level headcount, turnover, and tenure |
+| `attendance_drilldown.html` | Late arrivals, early departures, overtime by employee |
+| `tenure_by_department.html` | Average tenure by department for retention insights |
+| `attendance_rates.html` | Attendance patterns and discipline metrics |
+| `rolling_hours_4w.html` | Rolling average working hours—detects overtime or productivity trends |
+| `work_hours_overtime.html` | Total overtime count and workload pressure |
+| `attendance_discipline.html` | Punctuality and early-departure frequency |
+| `attendance_heatmap.html` | Heatmap of attendance patterns across time |
+
+### Output location
+
+Dashboards are written to `dashboard/output/`. Open any `.html` file in a browser to explore interactively.
+
+### Regenerating dashboards
+
+After the gold layer is populated:
+
+```bash
+python dashboard/visualize.py
+```
+
+---
+
 ## Schema Documentation
 
 ### Database model
 
-![Database Model](images/Database%20Model.png)
+Database Model
 
 ### Schema roles
 
-| Schema | Purpose | Design style |
-| --- | --- | --- |
+
+| Schema   | Purpose                           | Design style                                      |
+| -------- | --------------------------------- | ------------------------------------------------- |
 | `bronze` | Raw landing zone for source files | Minimal transformation, preserves source fidelity |
-| `silver` | Cleaned operational model | Typed, deduplicated, relational, API-friendly |
-| `gold` | Reporting and KPI layer | Denormalized analytical marts |
+| `silver` | Cleaned operational model         | Typed, deduplicated, relational, API-friendly     |
+| `gold`   | Reporting and KPI layer           | Denormalized analytical marts                     |
+
 
 ### Core entity relationships
 
@@ -363,14 +400,16 @@ Key design details:
 
 Gold tables are derived from silver and optimized for analytical reads:
 
-| Table | Grain | Purpose |
-| --- | --- | --- |
-| `gold.employee_monthly_snapshot` | one row per employee per month | active status, tenure, job, and department snapshot |
-| `gold.timesheet_daily_summary` | one row per employee per day | worked hours, shifts, lateness, early departure, and overtime |
-| `gold.employee_attendance_metrics` | one row per employee per month | attendance and working-hour KPIs |
-| `gold.department_monthly_metrics` | one row per department per month | headcount, hires, terminations, turnover, and attendance rates |
-| `gold.headcount_trend` | one row per month | organization-level headcount and attrition trend |
-| `gold.organization_metrics` | one row per month | company-wide aggregates |
+
+| Table                              | Grain                            | Purpose                                                        |
+| ---------------------------------- | -------------------------------- | -------------------------------------------------------------- |
+| `gold.employee_monthly_snapshot`   | one row per employee per month   | active status, tenure, job, and department snapshot            |
+| `gold.timesheet_daily_summary`     | one row per employee per day     | worked hours, shifts, lateness, early departure, and overtime  |
+| `gold.employee_attendance_metrics` | one row per employee per month   | attendance and working-hour KPIs                               |
+| `gold.department_monthly_metrics`  | one row per department per month | headcount, hires, terminations, turnover, and attendance rates |
+| `gold.headcount_trend`             | one row per month                | organization-level headcount and attrition trend               |
+| `gold.organization_metrics`        | one row per month                | company-wide aggregates                                        |
+
 
 Gold tables do not currently declare foreign keys back to silver. They are rebuilt analytical marts rather than normalized transactional tables.
 
@@ -425,24 +464,26 @@ Every API response follows the same shape:
 
 ### Endpoint summary
 
-| Area | Method | Path | Description |
-| --- | --- | --- | --- |
-| Auth | POST | `/token` | Exchange username and password for a JWT |
-| Health | GET | `/health` | Service health check |
-| Employees | POST | `/employees` | Create employee (`admin`) |
-| Employees | GET | `/employees` | List employees |
-| Employees | GET | `/employees/{employee_id}` | Get one employee |
-| Employees | PATCH | `/employees/{employee_id}` | Update employee (`admin`) |
-| Employees | DELETE | `/employees/{employee_id}` | Delete employee (`admin`) |
-| Timesheets | GET | `/timesheets` | List timesheets |
-| Timesheets | GET | `/timesheets/employee/{employee_id}` | List timesheets for one employee |
-| Timesheets | GET | `/timesheets/filter` | Filter by date range and optional employee |
-| Analytics | GET | `/analytics/headcount` | Headcount trend |
-| Analytics | GET | `/analytics/departments` | Department metrics |
-| Analytics | GET | `/analytics/employees/{employee_id}/attendance` | Employee attendance metrics |
-| Analytics | GET | `/analytics/employees/attendance` | Attendance metrics for all employees |
-| Analytics | GET | `/analytics/organization` | Organization-wide metrics |
-| Analytics | GET | `/analytics/timesheets/daily` | Daily timesheet summary |
+
+| Area       | Method | Path                                            | Description                                |
+| ---------- | ------ | ----------------------------------------------- | ------------------------------------------ |
+| Auth       | POST   | `/token`                                        | Exchange username and password for a JWT   |
+| Health     | GET    | `/health`                                       | Service health check                       |
+| Employees  | POST   | `/employees`                                    | Create employee (`admin`)                  |
+| Employees  | GET    | `/employees`                                    | List employees                             |
+| Employees  | GET    | `/employees/{employee_id}`                      | Get one employee                           |
+| Employees  | PATCH  | `/employees/{employee_id}`                      | Update employee (`admin`)                  |
+| Employees  | DELETE | `/employees/{employee_id}`                      | Delete employee (`admin`)                  |
+| Timesheets | GET    | `/timesheets`                                   | List timesheets                            |
+| Timesheets | GET    | `/timesheets/employee/{employee_id}`            | List timesheets for one employee           |
+| Timesheets | GET    | `/timesheets/filter`                            | Filter by date range and optional employee |
+| Analytics  | GET    | `/analytics/headcount`                          | Headcount trend                            |
+| Analytics  | GET    | `/analytics/departments`                        | Department metrics                         |
+| Analytics  | GET    | `/analytics/employees/{employee_id}/attendance` | Employee attendance metrics                |
+| Analytics  | GET    | `/analytics/employees/attendance`               | Attendance metrics for all employees       |
+| Analytics  | GET    | `/analytics/organization`                       | Organization-wide metrics                  |
+| Analytics  | GET    | `/analytics/timesheets/daily`                   | Daily timesheet summary                    |
+
 
 ## Project Structure
 
@@ -473,40 +514,32 @@ Every API response follows the same shape:
 
 ## Environment Variables
 
-| Variable | Default | Used by |
-| --- | --- | --- |
-| `DATABASE_URL` | `postgresql://hr_insights:hr_insights@localhost:5432/hr_insights` | DB, ETL, dashboard, API |
-| `HR_INSIGHTS_MINIO_ENDPOINT` | `localhost:9000` | ETL |
-| `HR_INSIGHTS_MINIO_ACCESS_KEY` | `minioadmin` | ETL |
-| `HR_INSIGHTS_MINIO_SECRET_KEY` | `minioadmin` | ETL |
-| `HR_INSIGHTS_MINIO_SECURE` | `false` | ETL |
-| `HR_INSIGHTS_MINIO_BUCKET` | `hr-insights` | ETL |
-| `HR_INSIGHTS_RAW_DATA_DIR` | `data/raw` | ETL |
-| `HR_INSIGHTS_MANIFESTS_DIR` | `logs/manifests` | ETL |
-| `HR_INSIGHTS_ETL_BATCH_SIZE` | `1000` | ETL |
-| `HR_INSIGHTS_ETL_DEFAULT_YEAR` | `0` | ETL |
-| `HR_INSIGHTS_ETL_DEFAULT_MONTH` | `0` | ETL |
-| `API_HOST` | `0.0.0.0` | API |
-| `API_PORT` | `5173` | API |
-| `API_DEBUG` | `false` | API |
-| `API_ENV_NAME` | `development` | API |
-| `API_RELOAD` | `true` | API |
-| `SECRET_KEY` | `your-secret-key-change-in-production` | JWT signing |
-| `ALGORITHM` | `HS256` | JWT signing |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | JWT expiry |
+
+| Variable                        | Default                                                           | Used by                 |
+| ------------------------------- | ----------------------------------------------------------------- | ----------------------- |
+| `DATABASE_URL`                  | `postgresql://hr_insights:hr_insights@localhost:5432/hr_insights` | DB, ETL, dashboard, API |
+| `HR_INSIGHTS_MINIO_ENDPOINT`    | `localhost:9000`                                                  | ETL                     |
+| `HR_INSIGHTS_MINIO_ACCESS_KEY`  | `minioadmin`                                                      | ETL                     |
+| `HR_INSIGHTS_MINIO_SECRET_KEY`  | `minioadmin`                                                      | ETL                     |
+| `HR_INSIGHTS_MINIO_SECURE`      | `false`                                                           | ETL                     |
+| `HR_INSIGHTS_MINIO_BUCKET`      | `hr-insights`                                                     | ETL                     |
+| `HR_INSIGHTS_RAW_DATA_DIR`      | `data/raw`                                                        | ETL                     |
+| `HR_INSIGHTS_MANIFESTS_DIR`     | `logs/manifests`                                                  | ETL                     |
+| `HR_INSIGHTS_ETL_BATCH_SIZE`    | `1000`                                                            | ETL                     |
+| `HR_INSIGHTS_ETL_DEFAULT_YEAR`  | `0`                                                               | ETL                     |
+| `HR_INSIGHTS_ETL_DEFAULT_MONTH` | `0`                                                               | ETL                     |
+| `API_HOST`                      | `0.0.0.0`                                                         | API                     |
+| `API_PORT`                      | `5173`                                                            | API                     |
+| `API_DEBUG`                     | `false`                                                           | API                     |
+| `API_ENV_NAME`                  | `development`                                                     | API                     |
+| `API_RELOAD`                    | `true`                                                            | API                     |
+| `SECRET_KEY`                    | `your-secret-key-change-in-production`                            | JWT signing             |
+| `ALGORITHM`                     | `HS256`                                                           | JWT signing             |
+| `ACCESS_TOKEN_EXPIRE_MINUTES`   | `30`                                                              | JWT expiry              |
+
 
 All of these can be set in a root `.env` file.
 
 ## Analytics SQL
 
 Prebuilt KPI queries for the gold layer live in `src/etl/gold/metrics/kpis.sql`.
-
-## Dashboard Outputs
-
-After the gold layer is populated, regenerate dashboards with:
-
-```bash
-python dashboard/visualize.py
-```
-
-Generated files are written to `dashboard/output/`.

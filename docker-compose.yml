@@ -19,7 +19,7 @@ x-app-base: &app-base
     API_PORT: 5173
   volumes:
     - logs_data:/app/logs
-    - dashboard_output:/app/dashboard/output
+    - ./dashboard/output:/app/dashboard/output
     - ./src:/app/src
     - ./dashboard:/app/dashboard
     - ./alembic:/app/alembic
@@ -86,4 +86,3 @@ volumes:
   postgres_data:
   minio_data:
   logs_data:
-  dashboard_output:

@@ -694,7 +694,7 @@ def attendance_discipline_dashboard(daily: pd.DataFrame) -> go.Figure:
     )
     heat_html = OUTPUT_DIR / "attendance_heatmap.html"
     heat_fig.write_html(heat_html, include_plotlyjs="cdn")
-    print(f"Wrote {heat_html} (heatmap) — kept separate for clarity.")
+    print(f"Wrote {heat_html} (heatmap)")
 
     fig.update_layout(
         title="Attendance Discipline",
