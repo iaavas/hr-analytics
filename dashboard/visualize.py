@@ -63,15 +63,31 @@ def load_department_metrics(engine) -> pd.DataFrame:
 
 def load_employee_snapshots(engine) -> pd.DataFrame:
     q = """
-    SELECT client_employee_id, department_id, department_name, job_title,
-           year, month, is_active
-    FROM gold.employee_monthly_snapshot
-    ORDER BY year, month;
+    SELECT
+        s.client_employee_id,
+        s.department_id,
+        s.department_name,
+        s.job_title,
+        s.hire_date,
+        s.term_date,
+        e.organization_id,
+        COALESCE(o.organization_name, e.organization_id) AS organization_name,
+        s.year,
+        s.month,
+        s.is_active
+    FROM gold.employee_monthly_snapshot s
+    LEFT JOIN silver.employee e
+        ON s.client_employee_id = e.client_employee_id
+    LEFT JOIN silver.organization o
+        ON e.organization_id = o.organization_id
+    ORDER BY s.year, s.month;
     """
     df = pd.read_sql(q, engine)
     if df.empty:
         return df
     df["date"] = [_first_of_month(y, m) for y, m in zip(df.year, df.month)]
+    df["hire_date"] = pd.to_datetime(df["hire_date"], errors="coerce")
+    df["term_date"] = pd.to_datetime(df["term_date"], errors="coerce")
     return df
 
 
@@ -93,11 +109,29 @@ def load_attendance(engine) -> pd.DataFrame:
 
 def load_timesheet_daily(engine) -> pd.DataFrame:
     q = """
-    SELECT client_employee_id, department_id, work_date,
-           total_hours_worked, late_arrival_count,
-           early_departure_count, overtime_count
-    FROM gold.timesheet_daily_summary
-    ORDER BY work_date;
+    SELECT
+        t.client_employee_id,
+        NULLIF(
+            TRIM(
+                COALESCE(NULLIF(e.preferred_name, ''), NULLIF(e.first_name, ''))
+                || ' ' ||
+                COALESCE(NULLIF(e.last_name, ''), '')
+            ),
+            ''
+        ) AS employee_name,
+        t.department_id,
+        d.department_name,
+        t.work_date,
+        t.total_hours_worked,
+        t.late_arrival_count,
+        t.early_departure_count,
+        t.overtime_count
+    FROM gold.timesheet_daily_summary t
+    LEFT JOIN silver.employee e
+        ON t.client_employee_id = e.client_employee_id
+    LEFT JOIN silver.department d
+        ON t.department_id = d.department_id
+    ORDER BY t.work_date;
     """
     df = pd.read_sql(q, engine)
     if df.empty:
@@ -126,49 +160,95 @@ def workforce_dashboard(
     snapshots: pd.DataFrame,
     org_metrics: pd.DataFrame,
 ) -> go.Figure:
-    """Headcount, turnover, early attrition – with simple scope filters."""
+    """Headcount, turnover, early attrition with real org/department/job scopes."""
 
-    if headcount.empty:
-        raise ValueError("No headcount data found; run gold ETL first.")
-
-    base = headcount.copy()
-    base["label"] = "Company"
-
-    if dept_metrics.empty:
-        dept_traces = pd.DataFrame()
-    else:
-        dept_top = _top_categories(dept_metrics["department_name"].dropna())
-        dept_traces = (
-            dept_metrics[dept_metrics["department_name"].isin(dept_top)]
-            .groupby(["department_name", "date"], as_index=False)
-            .agg(
-                active_headcount=("active_headcount", "sum"),
-                terminations=("total_terminations", "sum"),
-                turnover_rate=("turnover_rate", "mean"),
-            )
-        )
+    del headcount, dept_metrics, org_metrics
 
     if snapshots.empty:
-        job_traces = pd.DataFrame()
-    else:
-        job_top = _top_categories(snapshots["job_title"].dropna())
-        job_traces = (
-            snapshots[(snapshots["job_title"].isin(job_top))
-                      & (snapshots["is_active"] == True)]
-            .groupby(["job_title", "date"], as_index=False)
-            .agg(active_headcount=("client_employee_id", "count"))
+        raise ValueError(
+            "Employee monthly snapshots are empty; run gold ETL first.")
+
+    scoped = snapshots.copy()
+    scoped["department_label"] = (
+        scoped["department_name"]
+        .fillna(scoped["department_id"])
+        .fillna("Unknown Department")
+    )
+    scoped["job_label"] = scoped["job_title"].fillna("Unknown Job Title")
+    scoped["organization_label"] = (
+        scoped["organization_name"]
+        .fillna(scoped["organization_id"])
+        .fillna("Unknown Organization")
+    )
+
+    def _build_snapshot_metrics(group_col: str, top: Optional[int] = None) -> pd.DataFrame:
+        if group_col not in scoped.columns:
+            return pd.DataFrame()
+
+        df = scoped[scoped[group_col].notna()].copy()
+        if df.empty:
+            return df
+
+        if top is not None:
+            top_groups = _top_categories(
+                df.loc[df["is_active"] == True, group_col].dropna(),
+                top=top,
+            )
+            df = df[df[group_col].isin(top_groups)]
+            if df.empty:
+                return df
+
+        snapshot_month = df["date"].dt.to_period("M")
+        hire_month = df["hire_date"].dt.to_period("M")
+        term_month = df["term_date"].dt.to_period("M")
+        tenure_days = (df["term_date"] - df["hire_date"]).dt.days
+
+        df["is_active_flag"] = df["is_active"].fillna(False).astype(int)
+        df["is_new_hire_month"] = (
+            hire_month == snapshot_month).fillna(False).astype(int)
+        df["is_termination_month"] = (
+            term_month == snapshot_month).fillna(False).astype(int)
+        df["is_early_attrition_month"] = (
+            (term_month == snapshot_month)
+            & tenure_days.notna()
+            & (tenure_days <= 90)
+        ).fillna(False).astype(int)
+
+        agg = (
+            df.groupby([group_col, "date"], as_index=False)
+            .agg(
+                active_headcount=("is_active_flag", "sum"),
+                new_hires=("is_new_hire_month", "sum"),
+                terminations=("is_termination_month", "sum"),
+                early_attrition_count=("is_early_attrition_month", "sum"),
+            )
+            .sort_values(["date", group_col])
         )
 
-    if org_metrics.empty:
-        org_traces = pd.DataFrame()
-    else:
-        org_traces = (
-            org_metrics.groupby(["organization_name", "date"], as_index=False)
-            .agg(
-                active_headcount=("active_employees", "sum"),
-                turnover_rate=("turnover_rate", "mean"),
-            )
+        turnover = (
+            agg["terminations"] /
+            agg["active_headcount"].replace(0, pd.NA) * 100
         )
+        attrition = (
+            agg["early_attrition_count"] /
+            agg["terminations"].replace(0, pd.NA) * 100
+        )
+        agg["turnover_rate"] = pd.to_numeric(
+            turnover, errors="coerce").round(2)
+        agg["early_attrition_rate"] = (
+            pd.to_numeric(attrition, errors="coerce")
+            .fillna(0)
+            .round(2)
+        )
+        return agg
+
+    dept_traces = _build_snapshot_metrics("department_label", top=6)
+    job_traces = _build_snapshot_metrics("job_label", top=6)
+    org_traces = _build_snapshot_metrics("organization_label")
+
+    if dept_traces.empty and job_traces.empty and org_traces.empty:
+        raise ValueError(
+            "No workforce trend groupings found in employee snapshots.")
 
     fig = make_subplots(
         rows=3,
@@ -184,7 +264,6 @@ def workforce_dashboard(
         ),
     )
 
-    # ── Helper series extractors ──────────────────────────────────────────────
     def _termination_series(df: pd.DataFrame):
         for col in ("terminations", "total_terminations", "termination_count"):
             if col in df:
@@ -197,70 +276,47 @@ def workforce_dashboard(
                 return df[col]
         return pd.Series([None] * len(df))
 
-    # ── Quarterize helpers ────────────────────────────────────────────────────
-    def _quarterize_company(df: pd.DataFrame) -> pd.DataFrame:
+    def _quarterize_group(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
         if df.empty:
             return df
         tmp = df.copy()
         tmp["period"] = tmp["date"].dt.to_period("Q")
         agg = (
-            tmp.groupby("period", as_index=False)
+            tmp.groupby([group_col, "period"], as_index=False)
             .agg(
                 active_headcount=("active_headcount", "last"),
-                terminations=("terminations", "sum"),
                 new_hires=("new_hires", "sum"),
+                terminations=("terminations", "sum"),
                 early_attrition_count=("early_attrition_count", "sum"),
             )
         )
-        rate_series = (
+        turnover = (
             agg["terminations"] /
             agg["active_headcount"].replace(0, pd.NA) * 100
         )
-        agg["turnover_rate"] = pd.to_numeric(
-            rate_series, errors="coerce").round(2)
-        agg["early_attrition_rate"] = (
+        attrition = (
             agg["early_attrition_count"] /
-            agg["new_hires"].replace(0, pd.NA) * 100
-        ).fillna(0).round(2)
-        agg["date"] = agg["period"].dt.to_timestamp(how="end")
-        return agg.drop(columns=["period"])
-
-    def _quarterize_group(df: pd.DataFrame, group_col: str, has_turnover: bool = True) -> pd.DataFrame:
-        if df.empty:
-            return df
-        tmp = df.copy()
-        tmp["period"] = tmp["date"].dt.to_period("Q")
-        agg = tmp.groupby([group_col, "period"], as_index=False).agg(
-            active_headcount=("active_headcount", "last"),
+            agg["terminations"].replace(0, pd.NA) * 100
         )
-        if "terminations" in tmp:
-            term = tmp.groupby([group_col, "period"], as_index=False)[
-                "terminations"].sum()
-            agg = agg.merge(term, on=[group_col, "period"], how="left")
-            rate_series = (
-                agg["terminations"] /
-                agg["active_headcount"].replace(0, pd.NA) * 100
-            )
-            agg["turnover_rate"] = pd.to_numeric(
-                rate_series, errors="coerce").round(2)
-        elif has_turnover and "turnover_rate" in tmp:
-            rate = tmp.groupby([group_col, "period"], as_index=False)[
-                "turnover_rate"].mean()
-            agg = agg.merge(rate, on=[group_col, "period"], how="left")
+        agg["turnover_rate"] = pd.to_numeric(
+            turnover, errors="coerce").round(2)
+        agg["early_attrition_rate"] = (
+            pd.to_numeric(attrition, errors="coerce")
+            .fillna(0)
+            .round(2)
+        )
         agg["date"] = agg["period"].dt.to_timestamp(how="end")
         return agg.drop(columns=["period"])
 
-    base_q = _quarterize_company(base)
-    dept_q = _quarterize_group(dept_traces, "department_name")
-    job_q = _quarterize_group(job_traces,  "job_title", has_turnover=False)
-    org_q = _quarterize_group(org_traces,  "organization_name")
+    dept_q = _quarterize_group(dept_traces, "department_label")
+    job_q = _quarterize_group(job_traces, "job_label")
+    org_q = _quarterize_group(org_traces, "organization_label")
 
     agg_monthly_x:   list[list] = []
     agg_monthly_y:   list[list] = []
     agg_quarterly_x: list[list] = []
     agg_quarterly_y: list[list] = []
 
-    company_indices: list[int] = []
     dept_indices:    list[int] = []
     job_indices:     list[int] = []
     org_indices:     list[int] = []
@@ -352,50 +408,46 @@ def workforce_dashboard(
             agg_quarterly_x.append(df_m["date"].tolist())
             agg_quarterly_y.append(df_m["early_attrition_rate"].tolist())
 
-    # ── Add company traces ────────────────────────────────────────────────────
-    start = len(fig.data)
-    add_headcount_trace(base, base_q, "Company", True)
-    add_turnover_trace(base, base_q, "Company", True)
-    add_attrition_trace(base, base_q, "Company", True)
-    company_indices = list(range(start, len(fig.data)))
+    default_scope = (
+        "org" if len(org_traces)
+        else "dept" if len(dept_traces)
+        else "job"
+    )
 
-    for dept in (dept_traces["department_name"].unique() if len(dept_traces) else []):
+    for dept in (dept_traces["department_label"].unique() if len(dept_traces) else []):
         start = len(fig.data)
-        df_m = dept_traces[dept_traces["department_name"] == dept]
-        df_q = dept_q[dept_q["department_name"] == dept]
-        add_headcount_trace(df_m, df_q, dept, False)
-        add_turnover_trace(df_m, df_q, dept, False)
+        df_m = dept_traces[dept_traces["department_label"] == dept]
+        df_q = dept_q[dept_q["department_label"] == dept]
+        add_headcount_trace(df_m, df_q, dept, default_scope == "dept")
+        add_turnover_trace(df_m, df_q, dept, default_scope == "dept")
+        add_attrition_trace(df_m, df_q, dept, default_scope == "dept")
         dept_indices.extend(range(start, len(fig.data)))
 
-    for title in (job_traces["job_title"].unique() if len(job_traces) else []):
+    for title in (job_traces["job_label"].unique() if len(job_traces) else []):
         start = len(fig.data)
-        df_m = job_traces[job_traces["job_title"] == title]
-        df_q = job_q[job_q["job_title"] == title]
-        add_headcount_trace(df_m, df_q, f"Job: {title}", False)
-        add_turnover_trace(
-            base, base_q, f"Job: {title} (company turnover)", False)
+        df_m = job_traces[job_traces["job_label"] == title]
+        df_q = job_q[job_q["job_label"] == title]
+        add_headcount_trace(
+            df_m, df_q, f"Job: {title}", default_scope == "job")
+        add_turnover_trace(df_m, df_q, f"Job: {title}", default_scope == "job")
         add_attrition_trace(
-            base, base_q, f"Job: {title} (company attrition)", False)
+            df_m, df_q, f"Job: {title}", default_scope == "job")
         job_indices.extend(range(start, len(fig.data)))
 
-    for org in (org_traces["organization_name"].unique() if len(org_traces) else []):
+    for org in (org_traces["organization_label"].unique() if len(org_traces) else []):
         start = len(fig.data)
-        df_m = org_traces[org_traces["organization_name"] == org]
-        df_q = org_q[org_q["organization_name"] == org]
-        add_headcount_trace(df_m, df_q, org, False)
-        add_turnover_trace(df_m, df_q, org, False)
-        add_attrition_trace(base, base_q, org, False)
+        df_m = org_traces[org_traces["organization_label"] == org]
+        df_q = org_q[org_q["organization_label"] == org]
+        add_headcount_trace(df_m, df_q, org, default_scope == "org")
+        add_turnover_trace(df_m, df_q, org, default_scope == "org")
+        add_attrition_trace(df_m, df_q, org, default_scope == "org")
         org_indices.extend(range(start, len(fig.data)))
 
-    # ── Visibility masks ──────────────────────────────────────────────────────
     trace_count = len(fig.data)
-    company_vis = [False] * trace_count
     dept_vis = [False] * trace_count
     job_vis = [False] * trace_count
     org_vis = [False] * trace_count
 
-    for idx in company_indices:
-        company_vis[idx] = True
     for idx in dept_indices:
         dept_vis[idx] = True
     for idx in job_indices:
@@ -403,7 +455,23 @@ def workforce_dashboard(
     for idx in org_indices:
         org_vis[idx] = True
 
-    # ── Layout ────────────────────────────────────────────────────────────────
+    view_buttons = []
+    if any(org_vis):
+        view_buttons.append(
+            {"label": "Organizations", "method": "update",
+                "args": [{"visible": org_vis}]}
+        )
+    if any(dept_vis):
+        view_buttons.append(
+            {"label": "Departments", "method": "update",
+                "args": [{"visible": dept_vis}]}
+        )
+    if any(job_vis):
+        view_buttons.append(
+            {"label": "Job Titles", "method": "update",
+                "args": [{"visible": job_vis}]}
+        )
+
     fig.update_layout(
         # Title sits HIGH, well above the button row
         title=dict(
@@ -430,22 +498,11 @@ def workforce_dashboard(
         plot_bgcolor="white",
         paper_bgcolor="white",
         updatemenus=[
-            # ── "View by" dropdown  (left side) ───────────────────────────
             dict(
-                buttons=[
-                    {"label": "Company",        "method": "update",
-                        "args": [{"visible": company_vis}]},
-                    {"label": "Top Depts",      "method": "update",
-                        "args": [{"visible": dept_vis}]},
-                    {"label": "Top Job Titles", "method": "update",
-                        "args": [{"visible": job_vis}]},
-                    {"label": "Organizations",  "method": "update",
-                        "args": [{"visible": org_vis}]},
-                ],
+                buttons=view_buttons,
                 direction="down",
                 x=0.0,
                 xanchor="left",
-                # below title (title is at y=0.99 in paper coords)
                 y=1.10,
                 yanchor="top",
                 showactive=True,
@@ -455,7 +512,6 @@ def workforce_dashboard(
                 font=dict(size=13),
                 pad=dict(l=8, r=12, t=8, b=8),
             ),
-            # ── "Granularity" dropdown  (clearly separated to the right) ──
             dict(
                 buttons=[
                     {"label": "Monthly",   "method": "update",
@@ -464,7 +520,7 @@ def workforce_dashboard(
                      "args": [{"x": agg_quarterly_x, "y": agg_quarterly_y}]},
                 ],
                 direction="down",
-                x=0.30,                   # wide enough gap so the two menus never touch
+                x=0.30,
                 xanchor="left",
                 y=1.10,
                 yanchor="top",
@@ -476,7 +532,6 @@ def workforce_dashboard(
                 pad=dict(l=8, r=12, t=8, b=8),
             ),
         ],
-        # Small labels above each dropdown so their purpose is obvious
         annotations=[
             dict(
                 text="<b>View by</b>",
@@ -497,7 +552,6 @@ def workforce_dashboard(
         ],
     )
 
-    # ── Axes ──────────────────────────────────────────────────────────────────
     fig.update_yaxes(title_text="Headcount",
                      showgrid=True, gridcolor="#EEEEEE", row=1, col=1)
     fig.update_yaxes(title_text="Terminations",
@@ -507,13 +561,10 @@ def workforce_dashboard(
     fig.update_yaxes(title_text="Early Attrition %",
                      showgrid=True, gridcolor="#EEEEEE", row=3, col=1)
 
-    # Range slider only on the BOTTOM subplot — and kept thin so it doesn't
-    # create a phantom 4th panel
     fig.update_xaxes(rangeslider_visible=False, row=1, col=1)
     fig.update_xaxes(rangeslider_visible=False, row=2, col=1)
     fig.update_xaxes(
         rangeslider_visible=True,
-        # thin strip, not a full-height panel
         rangeslider=dict(thickness=0.04),
         showgrid=True,
         gridcolor="#EEEEEE",
@@ -563,8 +614,7 @@ def work_hours_dashboard(
         rows=3,
         cols=1,
         shared_xaxes=False,
-        vertical_spacing=0.22,          # large gap to clear rotated dept-name labels
-        # explicit ratios so no subplot is squeezed
+        vertical_spacing=0.22,
         row_heights=[0.35, 0.35, 0.30],
         subplot_titles=(
             "Average Working Hours per Employee (box by department)",
@@ -573,7 +623,6 @@ def work_hours_dashboard(
         ),
     )
 
-    # ── Row 1 : box plot by department ───────────────────────────────────────
     fig.add_trace(
         go.Box(
             x=box_df["department"],
@@ -587,7 +636,6 @@ def work_hours_dashboard(
         row=1, col=1,
     )
 
-    # ── Row 2 : rolling average lines ────────────────────────────────────────
     fig.add_trace(
         go.Scatter(
             x=daily_mean["work_date"],
@@ -621,7 +669,6 @@ def work_hours_dashboard(
         row=2, col=1,
     )
 
-    # ── Row 3 : overtime bar chart ────────────────────────────────────────────
     fig.add_trace(
         go.Bar(
             x=daily_mean["work_date"],
@@ -633,7 +680,6 @@ def work_hours_dashboard(
         row=3, col=1,
     )
 
-    # ── Dropdown buttons (rolling window selector) ────────────────────────────
     buttons = [
         {
             "label": "Rolling 7d",
@@ -672,7 +718,7 @@ def work_hours_dashboard(
             bordercolor="#CCCCCC",
             borderwidth=1,
         ),
-        margin=dict(t=150, b=80, l=80, r=160),  # r=160 leaves room for legend
+        margin=dict(t=150, b=80, l=80, r=160),
         plot_bgcolor="white",
         paper_bgcolor="white",
         updatemenus=[
@@ -692,7 +738,6 @@ def work_hours_dashboard(
             ),
         ],
         annotations=[
-            # dropdown label
             dict(
                 text="<b>Rolling window</b>",
                 x=0.0, xref="paper",
@@ -704,9 +749,6 @@ def work_hours_dashboard(
         ],
     )
 
-    # ── Axes ──────────────────────────────────────────────────────────────────
-
-    # Row 1 – box plot: rotate labels so they don't bleed into row 2
     fig.update_xaxes(
         tickangle=-35,
         tickfont=dict(size=10),
@@ -720,7 +762,6 @@ def work_hours_dashboard(
         row=1, col=1,
     )
 
-    # Row 2 – rolling avg: keep range slider for scrubbing
     fig.update_xaxes(
         rangeslider_visible=True,
         rangeslider=dict(thickness=0.04),
@@ -735,7 +776,6 @@ def work_hours_dashboard(
         row=2, col=1,
     )
 
-    # Row 3 – overtime: NO range slider (was creating phantom 4th panel)
     fig.update_xaxes(
         rangeslider_visible=False,
         showgrid=True,
@@ -757,12 +797,29 @@ def attendance_discipline_dashboard(daily: pd.DataFrame) -> go.Figure:
         raise ValueError("Timesheet daily summary is empty.")
 
     dept = (
-        daily.groupby("department_id", as_index=False)
+        daily.groupby(["department_id", "department_name"],
+                      as_index=False, dropna=False)
         .agg(
             late_arrivals=("late_arrival_count", "sum"),
             early_departures=("early_departure_count", "sum"),
         )
-        .sort_values("late_arrivals", ascending=False)
+    )
+    dept["department_label"] = (
+        dept["department_name"]
+        .fillna(dept["department_id"])
+        .fillna("Unknown")
+    )
+    late_dept = (
+        dept.loc[dept["late_arrivals"] > 0, [
+            "department_label", "late_arrivals"]]
+        .sort_values("late_arrivals", ascending=True)
+        .reset_index(drop=True)
+    )
+    early_dept = (
+        dept.loc[dept["early_departures"] > 0, [
+            "department_label", "early_departures"]]
+        .sort_values("early_departures", ascending=True)
+        .reset_index(drop=True)
     )
 
     heat = (
@@ -775,29 +832,45 @@ def attendance_discipline_dashboard(daily: pd.DataFrame) -> go.Figure:
     )
 
     offenders = (
-        daily.groupby("client_employee_id", as_index=False)
+        daily.groupby(
+            ["client_employee_id", "employee_name"],
+            as_index=False,
+            dropna=False,
+        )
         .agg(late_arrivals=("late_arrival_count", "sum"))
+    )
+    offenders["employee_label"] = (
+        offenders["employee_name"]
+        .fillna(offenders["client_employee_id"])
+        .fillna("Unknown")
+    )
+    offenders = (
+        offenders.loc[offenders["late_arrivals"] >
+                      0, ["employee_label", "late_arrivals"]]
         .sort_values("late_arrivals", ascending=False)
         .head(10)
+        .sort_values("late_arrivals", ascending=True)
+        .reset_index(drop=True)
     )
 
     fig = make_subplots(
         rows=3,
         cols=1,
-        vertical_spacing=0.1,
+        vertical_spacing=0.16,
         subplot_titles=(
             "Late Arrival Frequency by Department",
             "Early Departure Count by Department",
-            "Top 10 Late Arrival Offenders",
+            "Top Late Arrival Offenders",
         ),
     )
 
     fig.add_trace(
         go.Bar(
-            x=dept["department_id"].fillna("Unknown"),
-            y=dept["late_arrivals"],
+            x=late_dept["late_arrivals"],
+            y=late_dept["department_label"],
             name="Late arrivals",
             marker_color="#4C78A8",
+            orientation="h",
         ),
         row=1,
         col=1,
@@ -805,10 +878,11 @@ def attendance_discipline_dashboard(daily: pd.DataFrame) -> go.Figure:
 
     fig.add_trace(
         go.Bar(
-            x=dept["department_id"].fillna("Unknown"),
-            y=dept["early_departures"],
+            x=early_dept["early_departures"],
+            y=early_dept["department_label"],
             name="Early departures",
             marker_color="#F58518",
+            orientation="h",
         ),
         row=2,
         col=1,
@@ -816,10 +890,11 @@ def attendance_discipline_dashboard(daily: pd.DataFrame) -> go.Figure:
 
     fig.add_trace(
         go.Bar(
-            x=offenders["client_employee_id"],
-            y=offenders["late_arrivals"],
+            x=offenders["late_arrivals"],
+            y=offenders["employee_label"],
             name="Late arrivals",
             marker_color="#E45756",
+            orientation="h",
         ),
         row=3,
         col=1,
@@ -839,12 +914,16 @@ def attendance_discipline_dashboard(daily: pd.DataFrame) -> go.Figure:
 
     fig.update_layout(
         title="Attendance Discipline",
-        height=900,
+        height=1040,
         bargap=0.2,
+        margin=dict(t=90, b=70, l=60, r=30),
     )
-    fig.update_yaxes(title_text="Late arrivals", row=1, col=1)
-    fig.update_yaxes(title_text="Early departures", row=2, col=1)
-    fig.update_yaxes(title_text="Count", row=3, col=1)
+    fig.update_xaxes(title_text="Late arrivals", row=1, col=1)
+    fig.update_xaxes(title_text="Early departures", row=2, col=1)
+    fig.update_xaxes(title_text="Count", row=3, col=1)
+    fig.update_yaxes(automargin=True, row=1, col=1)
+    fig.update_yaxes(automargin=True, row=2, col=1)
+    fig.update_yaxes(automargin=True, row=3, col=1)
 
     return fig
 

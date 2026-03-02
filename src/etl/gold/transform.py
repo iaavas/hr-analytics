@@ -39,6 +39,8 @@ def get_employees_from_db(db: Session) -> pd.DataFrame:
                 "client_employee_id": emp.client_employee_id,
                 "first_name": emp.first_name,
                 "last_name": emp.last_name,
+                "organization_id": emp.organization_id,
+                "organization_name": emp.organization.organization_name if emp.organization else None,
                 "department_id": emp.department_id,
                 "department_name": emp.department.department_name if emp.department else None,
                 "job_code": emp.job_code,

@@ -237,83 +237,95 @@ def load_organization_metrics(
 ):
     ref_date = date(year, month, 1)
     month_end = (ref_date + pd.offsets.MonthEnd(0)).date()
+    if employees.empty:
+        return
 
-    total_employees = len(employees)
-    active_employees = len(
-        employees[
-            (employees["hire_date"].notna())
-            & (employees["hire_date"] <= month_end)
-            & ((employees["term_date"].isna()) | (employees["term_date"] >= ref_date))
+    org_keys = (
+        employees[["organization_id", "organization_name"]]
+        .drop_duplicates()
+        .replace({pd.NA: None})
+    )
+
+    for _, org in org_keys.iterrows():
+        org_id = org.get("organization_id")
+        org_name = org.get("organization_name")
+
+        if _is_nullish(org_id):
+            org_employees = employees[employees["organization_id"].isna()].copy()
+        else:
+            org_employees = employees[employees["organization_id"] == org_id].copy()
+
+        if org_employees.empty:
+            continue
+
+        total_employees = len(org_employees)
+        active_employees_df = org_employees[
+            (org_employees["hire_date"].notna())
+            & (org_employees["hire_date"] <= month_end)
+            & ((org_employees["term_date"].isna()) | (org_employees["term_date"] >= ref_date))
         ]
-    )
-    total_departments = (
-        employees["department_id"].nunique(
-        ) if "department_id" in employees.columns else 0
-    )
+        active_employees = len(active_employees_df)
+        total_departments = (
+            org_employees["department_id"].dropna().nunique()
+            if "department_id" in org_employees.columns
+            else 0
+        )
+        avg_tenure = (
+            active_employees_df["tenure_days"].mean()
+            if len(active_employees_df) > 0 and "tenure_days" in active_employees_df.columns
+            else 0
+        )
 
-    active_emp = employees[
-        (employees["hire_date"].notna())
-        & (employees["hire_date"] <= month_end)
-        & ((employees["term_date"].isna()) | (employees["term_date"] >= ref_date))
-    ]
-    avg_tenure = (
-        active_emp["tenure_days"].mean()
-        if len(active_emp) > 0 and "tenure_days" in active_emp.columns
-        else 0
-    )
+        avg_late_rate = 0.0
+        avg_early_rate = 0.0
+        avg_overtime_rate = 0.0
 
-    turnover_rate = 0.0
-    avg_late_rate = 0
-    avg_early_rate = 0
-    avg_overtime_rate = 0
+        if not timesheets.empty and "work_date" in timesheets.columns:
+            employee_ids = org_employees["client_employee_id"].tolist()
+            month_ts = timesheets[
+                (timesheets["client_employee_id"].isin(employee_ids))
+                & (timesheets["work_date"] >= ref_date)
+                & (timesheets["work_date"] <= month_end)
+            ]
 
-    if not timesheets.empty and "work_date" in timesheets.columns:
-        month_ts = timesheets[
-            (timesheets["work_date"] >= ref_date) & (
-                timesheets["work_date"] <= month_end)
-        ]
+            if len(month_ts) > 0:
+                total_shifts = len(month_ts)
+                avg_late_rate = month_ts["is_late"].sum() / total_shifts * 100
+                avg_early_rate = month_ts["is_early_departure"].sum() / total_shifts * 100
+                avg_overtime_rate = month_ts["is_overtime"].sum() / total_shifts * 100
 
-        if len(month_ts) > 0:
-            total_shifts = len(month_ts)
-            avg_late_rate = month_ts["is_late"].sum() / total_shifts * 100
-            avg_early_rate = month_ts["is_early_departure"].sum(
-            ) / total_shifts * 100
-            avg_overtime_rate = month_ts["is_overtime"].sum(
-            ) / total_shifts * 100
+        terminations = len(
+            org_employees[
+                (org_employees["term_date"].notna())
+                & (org_employees["term_date"] >= ref_date)
+                & (org_employees["term_date"] <= month_end)
+            ]
+        )
+        turnover_rate = (
+            terminations / active_employees * 100
+            if active_employees > 0
+            else 0.0
+        )
 
-    new_hires = len(
-        employees[
-            (employees["hire_date"].notna())
-            & (employees["hire_date"] >= ref_date)
-            & (employees["hire_date"] <= month_end)
-        ]
-    )
-    terminations = len(
-        employees[
-            (employees["term_date"].notna())
-            & (employees["term_date"] >= ref_date)
-            & (employees["term_date"] <= month_end)
-        ]
-    )
-    if active_employees > 0:
-        turnover_rate = terminations / active_employees * 100
-
-    org_metrics = OrganizationMetrics(
-        organization_id="ORG001",
-        organization_name="Company",
-        year=year,
-        month=month,
-        total_employees=total_employees,
-        active_employees=active_employees,
-        total_departments=total_departments,
-        avg_tenure_days=_to_native(
-            round(avg_tenure, 2)) if avg_tenure else None,
-        turnover_rate=_to_native(round(turnover_rate, 2)),
-        avg_late_arrival_rate=_to_native(round(avg_late_rate, 2)),
-        avg_early_departure_rate=_to_native(round(avg_early_rate, 2)),
-        avg_overtime_rate=_to_native(round(avg_overtime_rate, 2)),
-    )
-    db.add(org_metrics)
+        org_metrics = OrganizationMetrics(
+            organization_id=None if _is_nullish(org_id) else str(org_id),
+            organization_name=(
+                None
+                if _is_nullish(org_name)
+                else str(org_name)
+            ) or (None if _is_nullish(org_id) else str(org_id)),
+            year=year,
+            month=month,
+            total_employees=total_employees,
+            active_employees=active_employees,
+            total_departments=total_departments,
+            avg_tenure_days=_to_native(round(avg_tenure, 2)) if avg_tenure else None,
+            turnover_rate=_to_native(round(turnover_rate, 2)),
+            avg_late_arrival_rate=_to_native(round(avg_late_rate, 2)),
+            avg_early_departure_rate=_to_native(round(avg_early_rate, 2)),
+            avg_overtime_rate=_to_native(round(avg_overtime_rate, 2)),
+        )
+        db.add(org_metrics)
 
 
 def run_gold_etl(
