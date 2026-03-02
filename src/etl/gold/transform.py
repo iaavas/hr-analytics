@@ -207,8 +207,9 @@ def calculate_headcount_trend(
         ]
     )
 
+    # Of terminations this month, what % left within 90 days of hire
     early_attrition_rate = (early_attrition_count /
-                            new_hires * 100) if new_hires > 0 else 0.0
+                            terminations * 100) if terminations > 0 else 0.0
 
     return {
         "year": year,

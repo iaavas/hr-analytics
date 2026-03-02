@@ -159,7 +159,6 @@ def workforce_dashboard(
             .agg(active_headcount=("client_employee_id", "count"))
         )
 
-    # Organization-level (if multiple orgs exist)
     if org_metrics.empty:
         org_traces = pd.DataFrame()
     else:
@@ -175,7 +174,8 @@ def workforce_dashboard(
         rows=3,
         cols=1,
         shared_xaxes=True,
-        vertical_spacing=0.08,
+        vertical_spacing=0.12,
+        row_heights=[0.34, 0.34, 0.32],
         specs=[[{}], [{"secondary_y": True}], [{}]],
         subplot_titles=(
             "Active Headcount Over Time",
@@ -184,22 +184,20 @@ def workforce_dashboard(
         ),
     )
 
+    # ── Helper series extractors ──────────────────────────────────────────────
     def _termination_series(df: pd.DataFrame):
-        if "terminations" in df:
-            return df["terminations"]
-        if "total_terminations" in df:
-            return df["total_terminations"]
-        if "termination_count" in df:
-            return df["termination_count"]
+        for col in ("terminations", "total_terminations", "termination_count"):
+            if col in df:
+                return df[col]
         return pd.Series([None] * len(df))
 
     def _turnover_series(df: pd.DataFrame):
-        if "turnover_rate" in df:
-            return df["turnover_rate"]
-        if "turnover_rate_pct" in df:
-            return df["turnover_rate_pct"]
+        for col in ("turnover_rate", "turnover_rate_pct"):
+            if col in df:
+                return df[col]
         return pd.Series([None] * len(df))
 
+    # ── Quarterize helpers ────────────────────────────────────────────────────
     def _quarterize_company(df: pd.DataFrame) -> pd.DataFrame:
         if df.empty:
             return df
@@ -254,19 +252,20 @@ def workforce_dashboard(
 
     base_q = _quarterize_company(base)
     dept_q = _quarterize_group(dept_traces, "department_name")
-    job_q = _quarterize_group(job_traces, "job_title", has_turnover=False)
-    org_q = _quarterize_group(org_traces, "organization_name")
+    job_q = _quarterize_group(job_traces,  "job_title", has_turnover=False)
+    org_q = _quarterize_group(org_traces,  "organization_name")
 
-    agg_monthly_x: list[list] = []
-    agg_monthly_y: list[list] = []
+    agg_monthly_x:   list[list] = []
+    agg_monthly_y:   list[list] = []
     agg_quarterly_x: list[list] = []
     agg_quarterly_y: list[list] = []
 
     company_indices: list[int] = []
-    dept_indices: list[int] = []
-    job_indices: list[int] = []
-    org_indices: list[int] = []
+    dept_indices:    list[int] = []
+    job_indices:     list[int] = []
+    org_indices:     list[int] = []
 
+    # ── Trace adders ──────────────────────────────────────────────────────────
     def add_headcount_trace(df_m: pd.DataFrame, df_q: pd.DataFrame, name: str, visible: bool):
         fig.add_trace(
             go.Scatter(
@@ -277,8 +276,7 @@ def workforce_dashboard(
                 hovertemplate="%{x|%Y-%m-%d}<br>Headcount=%{y}",
                 visible=visible,
             ),
-            row=1,
-            col=1,
+            row=1, col=1,
         )
         agg_monthly_x.append(df_m["date"].tolist())
         agg_monthly_y.append(df_m["active_headcount"].tolist())
@@ -303,8 +301,7 @@ def workforce_dashboard(
                 opacity=0.8,
                 visible=visible,
             ),
-            row=2,
-            col=1,
+            row=2, col=1,
         )
         fig.add_trace(
             go.Scatter(
@@ -316,11 +313,9 @@ def workforce_dashboard(
                 hovertemplate="%{x|%Y-%m-%d}<br>Turnover=%{y:.2f}%",
                 visible=visible,
             ),
-            row=2,
-            col=1,
+            row=2, col=1,
             secondary_y=True,
         )
-
         agg_monthly_x.extend([df_m["date"].tolist(), df_m["date"].tolist()])
         agg_monthly_y.extend([term_m.tolist(), rate_m.tolist()])
 
@@ -346,8 +341,7 @@ def workforce_dashboard(
                 hovertemplate="%{x|%Y-%m-%d}<br>Attrition=%{y:.2f}%",
                 visible=visible,
             ),
-            row=3,
-            col=1,
+            row=3, col=1,
         )
         agg_monthly_x.append(df_m["date"].tolist())
         agg_monthly_y.append(df_m["early_attrition_rate"].tolist())
@@ -358,13 +352,14 @@ def workforce_dashboard(
             agg_quarterly_x.append(df_m["date"].tolist())
             agg_quarterly_y.append(df_m["early_attrition_rate"].tolist())
 
+    # ── Add company traces ────────────────────────────────────────────────────
     start = len(fig.data)
     add_headcount_trace(base, base_q, "Company", True)
     add_turnover_trace(base, base_q, "Company", True)
     add_attrition_trace(base, base_q, "Company", True)
     company_indices = list(range(start, len(fig.data)))
 
-    for dept in dept_traces["department_name"].unique() if len(dept_traces) else []:
+    for dept in (dept_traces["department_name"].unique() if len(dept_traces) else []):
         start = len(fig.data)
         df_m = dept_traces[dept_traces["department_name"] == dept]
         df_q = dept_q[dept_q["department_name"] == dept]
@@ -372,7 +367,7 @@ def workforce_dashboard(
         add_turnover_trace(df_m, df_q, dept, False)
         dept_indices.extend(range(start, len(fig.data)))
 
-    for title in job_traces["job_title"].unique() if len(job_traces) else []:
+    for title in (job_traces["job_title"].unique() if len(job_traces) else []):
         start = len(fig.data)
         df_m = job_traces[job_traces["job_title"] == title]
         df_q = job_q[job_q["job_title"] == title]
@@ -383,7 +378,7 @@ def workforce_dashboard(
             base, base_q, f"Job: {title} (company attrition)", False)
         job_indices.extend(range(start, len(fig.data)))
 
-    for org in org_traces["organization_name"].unique() if len(org_traces) else []:
+    for org in (org_traces["organization_name"].unique() if len(org_traces) else []):
         start = len(fig.data)
         df_m = org_traces[org_traces["organization_name"] == org]
         df_q = org_q[org_q["organization_name"] == org]
@@ -392,6 +387,7 @@ def workforce_dashboard(
         add_attrition_trace(base, base_q, org, False)
         org_indices.extend(range(start, len(fig.data)))
 
+    # ── Visibility masks ──────────────────────────────────────────────────────
     trace_count = len(fig.data)
     company_vis = [False] * trace_count
     dept_vis = [False] * trace_count
@@ -407,50 +403,122 @@ def workforce_dashboard(
     for idx in org_indices:
         org_vis[idx] = True
 
+    # ── Layout ────────────────────────────────────────────────────────────────
     fig.update_layout(
-        title="Workforce Trend Dashboard",
-        legend_title="",
+        # Title sits HIGH, well above the button row
+        title=dict(
+            text="Workforce Trend Dashboard",
+            x=0.5,
+            xanchor="center",
+            y=0.99,
+            font=dict(size=18),
+        ),
         hovermode="x unified",
-        height=900,
+        height=1200,
+        # t=180 carves room for title + buttons
+        margin=dict(t=180, b=60, l=80, r=160),
+        legend=dict(
+            orientation="v",
+            x=1.02,
+            y=1.0,
+            xanchor="left",
+            yanchor="top",
+            bgcolor="rgba(255,255,255,0.85)",
+            bordercolor="#CCCCCC",
+            borderwidth=1,
+        ),
+        plot_bgcolor="white",
+        paper_bgcolor="white",
         updatemenus=[
-            {
-                "buttons": [
-                    {"label": "Company", "method": "update",
+            # ── "View by" dropdown  (left side) ───────────────────────────
+            dict(
+                buttons=[
+                    {"label": "Company",        "method": "update",
                         "args": [{"visible": company_vis}]},
-                    {"label": "Top Departments", "method": "update",
+                    {"label": "Top Depts",      "method": "update",
                         "args": [{"visible": dept_vis}]},
                     {"label": "Top Job Titles", "method": "update",
                         "args": [{"visible": job_vis}]},
-                    {"label": "Organizations", "method": "update",
+                    {"label": "Organizations",  "method": "update",
                         "args": [{"visible": org_vis}]},
                 ],
-                "direction": "down",
-                "x": 0,
-                "y": 1.15,
-                "showactive": True,
-                "pad": {"r": 10, "t": 10},
-            },
-            {
-                "buttons": [
-                    {"label": "Monthly", "method": "update", "args": [
-                        {"x": agg_monthly_x, "y": agg_monthly_y}]},
-                    {"label": "Quarterly", "method": "update", "args": [
-                        {"x": agg_quarterly_x, "y": agg_quarterly_y}]},
+                direction="down",
+                x=0.0,
+                xanchor="left",
+                # below title (title is at y=0.99 in paper coords)
+                y=1.10,
+                yanchor="top",
+                showactive=True,
+                bgcolor="#F4F4F4",
+                bordercolor="#CCCCCC",
+                borderwidth=1,
+                font=dict(size=13),
+                pad=dict(l=8, r=12, t=8, b=8),
+            ),
+            # ── "Granularity" dropdown  (clearly separated to the right) ──
+            dict(
+                buttons=[
+                    {"label": "Monthly",   "method": "update",
+                     "args": [{"x": agg_monthly_x,   "y": agg_monthly_y}]},
+                    {"label": "Quarterly", "method": "update",
+                     "args": [{"x": agg_quarterly_x, "y": agg_quarterly_y}]},
                 ],
-                "direction": "down",
-                "x": 0.18,
-                "y": 1.15,
-                "showactive": True,
-                "pad": {"r": 10, "t": 10},
-            },
+                direction="down",
+                x=0.30,                   # wide enough gap so the two menus never touch
+                xanchor="left",
+                y=1.10,
+                yanchor="top",
+                showactive=True,
+                bgcolor="#F4F4F4",
+                bordercolor="#CCCCCC",
+                borderwidth=1,
+                font=dict(size=13),
+                pad=dict(l=8, r=12, t=8, b=8),
+            ),
+        ],
+        # Small labels above each dropdown so their purpose is obvious
+        annotations=[
+            dict(
+                text="<b>View by</b>",
+                x=0.0, xref="paper",
+                y=1.135, yref="paper",
+                showarrow=False,
+                font=dict(size=11),
+                xanchor="left",
+            ),
+            dict(
+                text="<b>Granularity</b>",
+                x=0.30, xref="paper",
+                y=1.135, yref="paper",
+                showarrow=False,
+                font=dict(size=11),
+                xanchor="left",
+            ),
         ],
     )
 
-    fig.update_xaxes(rangeslider_visible=True, row=3, col=1)
-    fig.update_yaxes(title_text="Headcount", row=1, col=1)
-    fig.update_yaxes(title_text="Terminations", row=2, col=1)
-    fig.update_yaxes(title_text="Turnover %", secondary_y=True, row=2, col=1)
-    fig.update_yaxes(title_text="Early Attrition %", row=3, col=1)
+    # ── Axes ──────────────────────────────────────────────────────────────────
+    fig.update_yaxes(title_text="Headcount",
+                     showgrid=True, gridcolor="#EEEEEE", row=1, col=1)
+    fig.update_yaxes(title_text="Terminations",
+                     showgrid=True, gridcolor="#EEEEEE", row=2, col=1)
+    fig.update_yaxes(title_text="Turnover %",        showgrid=True,
+                     gridcolor="#EEEEEE", secondary_y=True, row=2, col=1)
+    fig.update_yaxes(title_text="Early Attrition %",
+                     showgrid=True, gridcolor="#EEEEEE", row=3, col=1)
+
+    # Range slider only on the BOTTOM subplot — and kept thin so it doesn't
+    # create a phantom 4th panel
+    fig.update_xaxes(rangeslider_visible=False, row=1, col=1)
+    fig.update_xaxes(rangeslider_visible=False, row=2, col=1)
+    fig.update_xaxes(
+        rangeslider_visible=True,
+        # thin strip, not a full-height panel
+        rangeslider=dict(thickness=0.04),
+        showgrid=True,
+        gridcolor="#EEEEEE",
+        row=3, col=1,
+    )
 
     return fig
 
@@ -495,7 +563,9 @@ def work_hours_dashboard(
         rows=3,
         cols=1,
         shared_xaxes=False,
-        vertical_spacing=0.08,
+        vertical_spacing=0.22,          # large gap to clear rotated dept-name labels
+        # explicit ratios so no subplot is squeezed
+        row_heights=[0.35, 0.35, 0.30],
         subplot_titles=(
             "Average Working Hours per Employee (box by department)",
             "Rolling Average Working Hours",
@@ -503,28 +573,30 @@ def work_hours_dashboard(
         ),
     )
 
+    # ── Row 1 : box plot by department ───────────────────────────────────────
     fig.add_trace(
         go.Box(
             x=box_df["department"],
             y=box_df["avg_hours_per_day"],
             name="Avg hours/day",
             boxmean=True,
+            marker_color="#4C78A8",
+            line_color="#4C78A8",
             hovertemplate="Dept=%{x}<br>Avg Hours=%{y:.2f}",
         ),
-        row=1,
-        col=1,
+        row=1, col=1,
     )
 
+    # ── Row 2 : rolling average lines ────────────────────────────────────────
     fig.add_trace(
         go.Scatter(
             x=daily_mean["work_date"],
             y=daily_mean["roll_7"],
             name="7-day rolling",
             mode="lines",
-            line=dict(color="#4C78A8"),
+            line=dict(color="#4C78A8", width=2),
         ),
-        row=2,
-        col=1,
+        row=2, col=1,
     )
     fig.add_trace(
         go.Scatter(
@@ -533,10 +605,9 @@ def work_hours_dashboard(
             name="14-day rolling",
             mode="lines",
             visible=False,
-            line=dict(color="#F58518"),
+            line=dict(color="#F58518", width=2),
         ),
-        row=2,
-        col=1,
+        row=2, col=1,
     )
     fig.add_trace(
         go.Scatter(
@@ -545,12 +616,12 @@ def work_hours_dashboard(
             name="30-day rolling",
             mode="lines",
             visible=False,
-            line=dict(color="#54A24B"),
+            line=dict(color="#54A24B", width=2),
         ),
-        row=2,
-        col=1,
+        row=2, col=1,
     )
 
+    # ── Row 3 : overtime bar chart ────────────────────────────────────────────
     fig.add_trace(
         go.Bar(
             x=daily_mean["work_date"],
@@ -559,54 +630,124 @@ def work_hours_dashboard(
             marker_color="#E45756",
             opacity=0.8,
         ),
-        row=3,
-        col=1,
+        row=3, col=1,
     )
 
+    # ── Dropdown buttons (rolling window selector) ────────────────────────────
     buttons = [
         {
             "label": "Rolling 7d",
             "method": "update",
-            "args": [
-                {"visible": [True, True, False, False, True]},
-            ],
+            "args": [{"visible": [True, True, False, False, True]}],
         },
         {
             "label": "Rolling 14d",
             "method": "update",
-            "args": [
-                {"visible": [True, False, True, False, True]},
-            ],
+            "args": [{"visible": [True, False, True, False, True]}],
         },
         {
             "label": "Rolling 30d",
             "method": "update",
-            "args": [
-                {"visible": [True, False, False, True, True]},
-            ],
+            "args": [{"visible": [True, False, False, True, True]}],
         },
     ]
 
     fig.update_layout(
-        title="Work Hours & Overtime Pattern",
-        height=900,
+        title=dict(
+            text="Work Hours & Overtime Pattern",
+            x=0.5,
+            xanchor="center",
+            font=dict(size=18),
+            y=0.99,
+        ),
+        height=1300,
         showlegend=True,
+        legend=dict(
+            orientation="v",
+            x=1.02,
+            y=1.0,
+            xanchor="left",
+            yanchor="top",
+            bgcolor="rgba(255,255,255,0.8)",
+            bordercolor="#CCCCCC",
+            borderwidth=1,
+        ),
+        margin=dict(t=150, b=80, l=80, r=160),  # r=160 leaves room for legend
+        plot_bgcolor="white",
+        paper_bgcolor="white",
         updatemenus=[
-            {
-                "buttons": buttons,
-                "direction": "down",
-                "x": 0,
-                "y": 1.12,
-                "showactive": True,
-            }
+            dict(
+                buttons=buttons,
+                direction="down",
+                x=0.0,
+                xanchor="left",
+                y=1.065,
+                yanchor="top",
+                showactive=True,
+                bgcolor="#F4F4F4",
+                bordercolor="#CCCCCC",
+                borderwidth=1,
+                font=dict(size=13),
+                pad=dict(r=12, t=8, b=8, l=8),
+            ),
+        ],
+        annotations=[
+            # dropdown label
+            dict(
+                text="<b>Rolling window</b>",
+                x=0.0, xref="paper",
+                y=1.095, yref="paper",
+                showarrow=False,
+                font=dict(size=12),
+                xanchor="left",
+            ),
         ],
     )
 
-    fig.update_xaxes(rangeslider_visible=True, row=2, col=1)
-    fig.update_xaxes(rangeslider_visible=True, row=3, col=1)
-    fig.update_yaxes(title_text="Avg hours/day", row=1, col=1)
-    fig.update_yaxes(title_text="Rolling avg hours", row=2, col=1)
-    fig.update_yaxes(title_text="Overtime count", row=3, col=1)
+    # ── Axes ──────────────────────────────────────────────────────────────────
+
+    # Row 1 – box plot: rotate labels so they don't bleed into row 2
+    fig.update_xaxes(
+        tickangle=-35,
+        tickfont=dict(size=10),
+        showgrid=False,
+        row=1, col=1,
+    )
+    fig.update_yaxes(
+        title_text="Avg hours/day",
+        showgrid=True,
+        gridcolor="#EEEEEE",
+        row=1, col=1,
+    )
+
+    # Row 2 – rolling avg: keep range slider for scrubbing
+    fig.update_xaxes(
+        rangeslider_visible=True,
+        rangeslider=dict(thickness=0.04),
+        showgrid=True,
+        gridcolor="#EEEEEE",
+        row=2, col=1,
+    )
+    fig.update_yaxes(
+        title_text="Rolling avg hours",
+        showgrid=True,
+        gridcolor="#EEEEEE",
+        row=2, col=1,
+    )
+
+    # Row 3 – overtime: NO range slider (was creating phantom 4th panel)
+    fig.update_xaxes(
+        rangeslider_visible=False,
+        showgrid=True,
+        gridcolor="#EEEEEE",
+        row=3, col=1,
+    )
+    fig.update_yaxes(
+        title_text="Overtime count",
+        showgrid=True,
+        gridcolor="#EEEEEE",
+        row=3, col=1,
+    )
 
     return fig
 
