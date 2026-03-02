@@ -24,7 +24,7 @@ HR Insights is a Python-based HR analytics platform built around a medallion-sty
 
 ### Architecture
 
-![System Architecture](images/System%20Architecture.png)
+System Architecture
 
 ## Engineering Decisions
 
@@ -46,7 +46,7 @@ HR Insights is a Python-based HR analytics platform built around a medallion-sty
 
 #### Medallion architecture
 
-![Medallion Architecture](images/Medallion%20Architecture.png)
+Medallion Architecture
 
 The project separates data into three schemas:
 
@@ -70,7 +70,7 @@ The trade-off is that bronze is a staging zone rather than an immediately query-
 
 #### Luigi markers and manifest hashing control reruns
 
-![ETL Flow](images/ETL.png)
+ETL Flow
 
 The ETL uses Luigi `LocalTarget` outputs under `logs/markers/` and discovery manifests under `logs/manifests/`.
 
@@ -126,10 +126,12 @@ At container startup, the `api` service automatically:
 
 **Service URLs:**
 
-| Service      | URL                          |
-| ------------ | ---------------------------- |
-| API docs     | http://localhost:5173/docs   |
-| MinIO console| http://localhost:9001        |
+
+| Service       | URL                                                      |
+| ------------- | -------------------------------------------------------- |
+| API docs      | [http://localhost:5173/docs](http://localhost:5173/docs) |
+| MinIO console | [http://localhost:9001](http://localhost:9001)           |
+
 
 **Shutdown:**
 
@@ -261,7 +263,6 @@ The full pipeline runs in this order:
 
 ### ETL commands
 
-
 #### Run the full ETL, QC report, and dashboards from MinIO
 
 ```bash
@@ -285,12 +286,13 @@ python -m src.etl.run --module src.etl.quality.tasks RunQCReport --local-schedul
 After the pipeline runs, check:
 
 
-| Output          | Location            | Notes                                                           |
-| --------------- | ------------------- | --------------------------------------------------------------- |
-| Luigi manifests | `logs/manifests/`   | discovered input files and hashes/etags                         |
-| Luigi markers   | `logs/markers/`     | completion markers for bronze, silver, gold, QC, and dashboards |
-| QC reports      | `logs/reports/`     | text reports such as `qc_report_YYYYMMDD_HHMMSS.txt`            |
+| Output          | Location            | Notes                                                                    |
+| --------------- | ------------------- | ------------------------------------------------------------------------ |
+| Luigi manifests | `logs/manifests/`   | discovered input files and hashes/etags                                  |
+| Luigi markers   | `logs/markers/`     | completion markers for bronze, silver, gold, QC, and dashboards          |
+| QC reports      | `logs/reports/`     | text reports such as `qc_report_YYYYMMDD_HHMMSS.txt`                     |
 | Dashboards      | `dashboard/output/` | Interactive Plotly HTML dashboards—see [Visualizations](#visualizations) |
+
 
 ### Generate dashboards directly
 
@@ -321,20 +323,23 @@ Available docs:
 The project produces **interactive Plotly HTML dashboards** that turn gold-layer analytics into clear, actionable insights. Each visualization now carries a short story callout and explicit drill-down controls so viewers can pivot quickly from the high level to the group they care about.
 
 Highlights:
+
 - Story panel on the workforce dashboard summarizes the latest headcount trend, turnover, and early attrition.
 - Drill-down menu exposes per-organization, per-department, and per-job lenses without leaving the page.
 - Filters and range sliders keep time navigation fast; tooltips are tuned for numeric readability.
 
 ### Generated dashboards (current)
 
-| Dashboard | Purpose | Interactivity |
-| --------- | ------- | ------------- |
-| `workforce_trend.html` | Headcount, turnover, early attrition over time | Story callout + org/dept/job drill-down + monthly/quarterly toggle + range slider |
-| `work_hours_overtime.html` | Working-hours distribution and overtime pressure | Rolling-window toggle (7/14/30d) + hover tooltips |
-| `attendance_discipline.html` | Late arrivals, early departures, top offenders | Comparative bars + linked heatmap output |
-| `attendance_heatmap.html` | Calendar heatmap of late arrivals | Date/weekday heatmap for quick anomaly scanning |
 
-> Note: Legacy entries (`executive_story.html`, `department_story.html`, etc.) are not yet implemented; build equivalents here if needed.
+| Dashboard                    | Purpose                                          | Interactivity                                                                     |
+| ---------------------------- | ------------------------------------------------ | --------------------------------------------------------------------------------- |
+| `workforce_trend.html`       | Headcount, turnover, early attrition over time   | Story callout + org/dept/job drill-down + monthly/quarterly toggle + range slider |
+| `work_hours_overtime.html`   | Working-hours distribution and overtime pressure | Rolling-window toggle (7/14/30d) + hover tooltips                                 |
+| `attendance_discipline.html` | Late arrivals, early departures, top offenders   | Comparative bars + linked heatmap output                                          |
+| `attendance_heatmap.html`    | Calendar heatmap of late arrivals                | Date/weekday heatmap for quick anomaly scanning                                   |
+
+
+>
 
 ### Output location
 
@@ -354,7 +359,7 @@ python dashboard/visualize.py
 
 ### Database model
 
-![Database Model](images/Database%20Model.png)
+Database Model
 
 ### Schema roles
 
