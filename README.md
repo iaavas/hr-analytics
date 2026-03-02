@@ -318,24 +318,23 @@ Available docs:
 
 ## Visualizations
 
-The project produces **interactive Plotly HTML dashboards** that turn gold-layer analytics into clear, actionable insights. Each visualization tells a data story with proper labeling, legends, and formatting—and includes interactive elements such as filters, drill-downs, and time ranges where appropriate.
+The project produces **interactive Plotly HTML dashboards** that turn gold-layer analytics into clear, actionable insights. Each visualization now carries a short story callout and explicit drill-down controls so viewers can pivot quickly from the high level to the group they care about.
 
-These dashboards surface the core assignment KPIs: active headcount over time, turnover trends, average tenure by department, working hours and overtime, late arrivals, early departures, rolling average hours, and early attrition—all derived from the gold-layer SQL analytics.
+Highlights:
+- Story panel on the workforce dashboard summarizes the latest headcount trend, turnover, and early attrition.
+- Drill-down menu exposes per-organization, per-department, and per-job lenses without leaving the page.
+- Filters and range sliders keep time navigation fast; tooltips are tuned for numeric readability.
 
-### Generated dashboards
+### Generated dashboards (current)
 
-| Dashboard | Purpose |
-| --------- | ------- |
-| `workforce_trend.html` | Active headcount over time, hiring and attrition trends |
-| `executive_story.html` | High-level KPIs and organization-wide metrics |
-| `department_story.html` | Department-level headcount, turnover, and tenure |
-| `attendance_drilldown.html` | Late arrivals, early departures, overtime by employee |
-| `tenure_by_department.html` | Average tenure by department for retention insights |
-| `attendance_rates.html` | Attendance patterns and discipline metrics |
-| `rolling_hours_4w.html` | Rolling average working hours—detects overtime or productivity trends |
-| `work_hours_overtime.html` | Total overtime count and workload pressure |
-| `attendance_discipline.html` | Punctuality and early-departure frequency |
-| `attendance_heatmap.html` | Heatmap of attendance patterns across time |
+| Dashboard | Purpose | Interactivity |
+| --------- | ------- | ------------- |
+| `workforce_trend.html` | Headcount, turnover, early attrition over time | Story callout + org/dept/job drill-down + monthly/quarterly toggle + range slider |
+| `work_hours_overtime.html` | Working-hours distribution and overtime pressure | Rolling-window toggle (7/14/30d) + hover tooltips |
+| `attendance_discipline.html` | Late arrivals, early departures, top offenders | Comparative bars + linked heatmap output |
+| `attendance_heatmap.html` | Calendar heatmap of late arrivals | Date/weekday heatmap for quick anomaly scanning |
+
+> Note: Legacy entries (`executive_story.html`, `department_story.html`, etc.) are not yet implemented; build equivalents here if needed.
 
 ### Output location
 

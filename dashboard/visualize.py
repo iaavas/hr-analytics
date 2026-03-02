@@ -31,6 +31,43 @@ def _top_categories(series: pd.Series, top: int = 6) -> List[str]:
     return series.value_counts().head(top).index.tolist()
 
 
+def summarize_workforce(headcount: pd.DataFrame) -> str:
+    """Short natural-language story for the annotation callout."""
+    if headcount.empty:
+        return "No headcount data yet — run gold ETL."
+
+    df = headcount.sort_values("date").copy()
+    latest = df.iloc[-1]
+    baseline = df.iloc[0]
+
+    def _fmt_pct(n: float) -> str:
+        if pd.isna(n):
+            return "n/a"
+        sign = "+" if n >= 0 else ""
+        return f"{sign}{n:.1f}%"
+
+    headcount_change = latest["active_headcount"] - baseline["active_headcount"]
+    headcount_pct = (
+        headcount_change / baseline["active_headcount"] * 100
+        if baseline["active_headcount"] else pd.NA
+    )
+    hires_3m = df.tail(3)["new_hires"].sum()
+    terms_3m = df.tail(3)["terminations"].sum()
+    net_3m = hires_3m - terms_3m
+
+    turnover_latest = latest.get("turnover_rate", pd.NA)
+    early_attr_latest = latest.get("early_attrition_rate", pd.NA)
+
+    pieces = [
+        f"As of {latest['date']:%b %Y}, headcount is {int(latest['active_headcount'])} "
+        f"({headcount_change:+} vs. start, {_fmt_pct(headcount_pct)}).",
+        f"Last 3 months: {int(hires_3m)} hires, {int(terms_3m)} terms (net {net_3m:+}).",
+        f"Turnover {_fmt_pct(turnover_latest)}, early attrition {_fmt_pct(early_attr_latest)}.",
+    ]
+
+    return "<br>".join(pieces)
+
+
 def load_headcount(engine) -> pd.DataFrame:
     q = """
     SELECT year, month, active_headcount, new_hires, terminations,
@@ -162,7 +199,7 @@ def workforce_dashboard(
 ) -> go.Figure:
     """Headcount, turnover, early attrition with real org/department/job scopes."""
 
-    del headcount, dept_metrics, org_metrics
+    story_text = summarize_workforce(headcount)
 
     if snapshots.empty:
         raise ValueError(
@@ -414,6 +451,8 @@ def workforce_dashboard(
         else "job"
     )
 
+    drill_groups: list[tuple[str, list[int]]] = []
+
     for dept in (dept_traces["department_label"].unique() if len(dept_traces) else []):
         start = len(fig.data)
         df_m = dept_traces[dept_traces["department_label"] == dept]
@@ -421,7 +460,9 @@ def workforce_dashboard(
         add_headcount_trace(df_m, df_q, dept, default_scope == "dept")
         add_turnover_trace(df_m, df_q, dept, default_scope == "dept")
         add_attrition_trace(df_m, df_q, dept, default_scope == "dept")
-        dept_indices.extend(range(start, len(fig.data)))
+        idx_range = list(range(start, len(fig.data)))
+        dept_indices.extend(idx_range)
+        drill_groups.append((f"Dept: {dept}", idx_range))
 
     for title in (job_traces["job_label"].unique() if len(job_traces) else []):
         start = len(fig.data)
@@ -432,7 +473,9 @@ def workforce_dashboard(
         add_turnover_trace(df_m, df_q, f"Job: {title}", default_scope == "job")
         add_attrition_trace(
             df_m, df_q, f"Job: {title}", default_scope == "job")
-        job_indices.extend(range(start, len(fig.data)))
+        idx_range = list(range(start, len(fig.data)))
+        job_indices.extend(idx_range)
+        drill_groups.append((f"Job: {title}", idx_range))
 
     for org in (org_traces["organization_label"].unique() if len(org_traces) else []):
         start = len(fig.data)
@@ -441,9 +484,14 @@ def workforce_dashboard(
         add_headcount_trace(df_m, df_q, org, default_scope == "org")
         add_turnover_trace(df_m, df_q, org, default_scope == "org")
         add_attrition_trace(df_m, df_q, org, default_scope == "org")
-        org_indices.extend(range(start, len(fig.data)))
+        idx_range = list(range(start, len(fig.data)))
+        org_indices.extend(idx_range)
+        drill_groups.append((f"Org: {org}", idx_range))
 
     trace_count = len(fig.data)
+    default_visible = [
+        (tr.visible if tr.visible is not None else True) for tr in fig.data
+    ]
     dept_vis = [False] * trace_count
     job_vis = [False] * trace_count
     org_vis = [False] * trace_count
@@ -472,6 +520,26 @@ def workforce_dashboard(
                 "args": [{"visible": job_vis}]}
         )
 
+    drill_buttons = [
+        {
+            "label": "Show all (current scope)",
+            "method": "update",
+            "args": [{"visible": default_visible}],
+        }
+    ]
+
+    for label, idxs in drill_groups:
+        vis = [False] * trace_count
+        for idx in idxs:
+            vis[idx] = True
+        drill_buttons.append(
+            {
+                "label": label[:32],
+                "method": "update",
+                "args": [{"visible": vis}],
+            }
+        )
+
     fig.update_layout(
         # Title sits HIGH, well above the button row
         title=dict(
@@ -484,7 +552,7 @@ def workforce_dashboard(
         hovermode="x unified",
         height=1200,
         # t=180 carves room for title + buttons
-        margin=dict(t=180, b=60, l=80, r=160),
+        margin=dict(t=180, b=60, l=80, r=240),
         legend=dict(
             orientation="v",
             x=1.02,
@@ -531,6 +599,20 @@ def workforce_dashboard(
                 font=dict(size=13),
                 pad=dict(l=8, r=12, t=8, b=8),
             ),
+            dict(
+                buttons=drill_buttons,
+                direction="down",
+                x=0.60,
+                xanchor="left",
+                y=1.10,
+                yanchor="top",
+                showactive=True,
+                bgcolor="#F4F4F4",
+                bordercolor="#CCCCCC",
+                borderwidth=1,
+                font=dict(size=13),
+                pad=dict(l=8, r=12, t=8, b=8),
+            ),
         ],
         annotations=[
             dict(
@@ -546,6 +628,26 @@ def workforce_dashboard(
                 x=0.30, xref="paper",
                 y=1.135, yref="paper",
                 showarrow=False,
+                font=dict(size=11),
+                xanchor="left",
+            ),
+            dict(
+                text="<b>Drill down</b>",
+                x=0.60, xref="paper",
+                y=1.135, yref="paper",
+                showarrow=False,
+                font=dict(size=11),
+                xanchor="left",
+            ),
+            dict(
+                text=f"<b>Story</b><br>{story_text}",
+                x=1.08, xref="paper",
+                y=0.50, yref="paper",
+                showarrow=False,
+                align="left",
+                bordercolor="#CCCCCC",
+                borderwidth=1,
+                bgcolor="rgba(255,255,255,0.9)",
                 font=dict(size=11),
                 xanchor="left",
             ),
