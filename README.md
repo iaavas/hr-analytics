@@ -24,7 +24,7 @@ HR Insights is a Python-based HR analytics platform built around a medallion-sty
 
 ### Architecture
 
-System Architecture
+![System Architecture](images/System%20Architecture.png)
 
 ## Engineering Decisions
 
@@ -46,7 +46,7 @@ System Architecture
 
 #### Medallion architecture
 
-Medallion Architecture
+![Medallion Architecture](images/Medallion%20Architecture.png)
 
 The project separates data into three schemas:
 
@@ -70,7 +70,7 @@ The trade-off is that bronze is a staging zone rather than an immediately query-
 
 #### Luigi markers and manifest hashing control reruns
 
-ETL Flow
+![ETL Flow](images/ETL.png)
 
 The ETL uses Luigi `LocalTarget` outputs under `logs/markers/` and discovery manifests under `logs/manifests/`.
 
@@ -354,7 +354,7 @@ python dashboard/visualize.py
 
 ### Database model
 
-Database Model
+![Database Model](images/Database%20Model.png)
 
 ### Schema roles
 
