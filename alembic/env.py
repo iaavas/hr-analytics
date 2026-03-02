@@ -5,7 +5,6 @@ from logging.config import fileConfig
 from sqlalchemy import create_engine, pool
 
 from alembic import context
-from src.app.config import settings
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -16,8 +15,10 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-_DEFAULT_URL = settings.database_url
-database_url = settings.database_url
+# Use same DB URL as app: DATABASE_URL env or default matching Docker Compose postgres
+_DEFAULT_URL = "postgresql://hr_insights:hr_insights@localhost:5432/hr_insights"
+database_url = os.environ.get(
+    "DATABASE_URL", config.get_main_option("sqlalchemy.url") or _DEFAULT_URL)
 
 # For autogenerate: import app Base and models so Alembic sees table definitions
 import src.db.models.bronze  # noqa: F401  # register tables with Base.metadata
