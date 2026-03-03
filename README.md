@@ -331,15 +331,13 @@ Highlights:
 ### Generated dashboards (current)
 
 
-| Dashboard                    | Purpose                                          | Interactivity                                                                     |
-| ---------------------------- | ------------------------------------------------ | --------------------------------------------------------------------------------- |
-| `workforce_trend.html`       | Headcount, turnover, early attrition over time   | Story callout + org/dept/job drill-down + monthly/quarterly toggle + range slider |
-| `work_hours_overtime.html`   | Working-hours distribution and overtime pressure | Rolling-window toggle (7/14/30d) + hover tooltips                                 |
-| `attendance_discipline.html` | Late arrivals, early departures, top offenders   | Comparative bars + linked heatmap output                                          |
-| `attendance_heatmap.html`    | Calendar heatmap of late arrivals                | Date/weekday heatmap for quick anomaly scanning                                   |
+| Dashboard                    | Purpose                                                                           | Interactivity                                                                     |
+| ---------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `executive_summary.html`     | Top-level KPI overview: headcount, turnover, hours, overtime, dept health, tenure | Multi-panel layout; hover tooltips                                                |
+| `workforce_trend.html`       | Headcount, turnover, early attrition over time                                    | Story callout + org/dept/job drill-down + monthly/quarterly toggle + range slider |
+| `work_hours_overtime.html`   | Working-hours distribution and overtime pressure                                  | Rolling-window toggle (7/14/30d) + hover tooltips                                 |
+| `attendance_discipline.html` | Late arrivals, early departures, top offenders                                    | Comparative bars                                                                  |
 
-
->
 
 ### Output location
 
