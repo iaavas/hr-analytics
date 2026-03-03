@@ -325,7 +325,7 @@ The project produces **interactive Plotly HTML dashboards** that turn gold-layer
 Highlights:
 
 - Story panel on the workforce dashboard summarizes the latest headcount trend, turnover, and early attrition.
-- Drill-down menu exposes per-organization, per-department, and per-job lenses without leaving the page.
+- Drill-down menu exposes per-organization, per-department without leaving the page.
 - Filters and range sliders keep time navigation fast; tooltips are tuned for numeric readability.
 
 ### Generated dashboards (current)
