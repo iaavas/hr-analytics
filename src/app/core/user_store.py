@@ -1,5 +1,3 @@
-"""In-memory user store for authentication. Replace with DB lookup in production."""
-
 from typing import Any, Optional
 
 from src.app.core.roles import ROLE_ADMIN, ROLE_VIEWER

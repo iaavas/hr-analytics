@@ -445,10 +445,17 @@ Authorization: Bearer <access_token>
 Obtain a token:
 
 - endpoint: `POST /token`
-- body: `{"username": "<username>", "password": "<password>"}`
+- body: `{"username": "admin", "password": "admin123"}`
 - response: `{"success": true, "data": {"access_token": "<jwt>", "token_type": "bearer"}, "message": "..."}`
 
 The repository includes in-memory demo users in `src/app/core/user_store.py` for local use. Replace or manage those credentials before using this outside a demo environment.
+
+For local development, use these demo credentials (default password is `admin123`):
+
+| Username | Password  | Role    |
+| -------- | --------- | ------- |
+| `admin`  | `admin123` | `admin` |
+| `viewer` | `admin123` | `viewer` |
 
 ### Authorization
 
